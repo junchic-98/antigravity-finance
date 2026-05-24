@@ -2152,6 +2152,8 @@ window.addEventListener("DOMContentLoaded", () => {
     document.addEventListener("click", autoScanClipboard);
     // Execute after a short delay on initial load
     setTimeout(autoScanClipboard, 800);
+    // 8.5 Immediately render the UI synchronously so the app loads instantly!
+    updateUI();
 
     // 9. Auto-fetch real-time exchange rates in the background immediately
     autoFetchExchangeRates();
