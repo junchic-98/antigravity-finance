@@ -15,7 +15,7 @@
     <!-- FontAwesome for Premium Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- CSS stylesheet -->
-    <link rel="stylesheet" href="style.css?v=13">
+    <link rel="stylesheet" href="style.css?v=14">
     <!-- PWA Manifest -->
     <link rel="manifest" href="manifest.json">
 </head>
@@ -229,57 +229,6 @@
                 </div>
             </section>
 
-            <!-- TAB 4: KAKAOTALK PARSER HUB -->
-            <section id="tab-parser" class="tab-pane">
-                <div class="section-header">
-                    <h2 class="page-title"><i class="fa-solid fa-comment-sms text-primary"></i> 카카오톡 알림톡 연동</h2>
-                </div>
-                <p class="section-desc">갤럭시 S23에 수신된 주식 체결 알림톡을 자동으로 분석하여 실시간으로 자산 포트폴리오를 업데이트합니다.</p>
-
-                <!-- Manual Clipboard Paste Box -->
-                <div class="glass-panel">
-                    <div class="panel-header">
-                        <h3 class="panel-title"><i class="fa-solid fa-paste"></i> 체결 알림톡 직접 붙여넣기</h3>
-                    </div>
-                    <div class="paste-container">
-                        <textarea class="textarea-paste" id="paste-input" placeholder="여기에 카카오톡 알림 메시지를 붙여넣어 보세요.&#10;예) [토스증권] AAPL 5주 매수 완료 (체결단가: 180.50 USD)"></textarea>
-                        <button class="btn-accent w-full" id="btn-parse-paste"><i class="fa-solid fa-bolt"></i> 즉시 분석 및 자산 반영</button>
-                    </div>
-                </div>
-
-                <!-- Automation Instruction Card -->
-                <div class="automation-card">
-                    <div class="automation-header">
-                        <span class="android-badge"><i class="fa-brands fa-android"></i> Galaxy S23</span>
-                        <h3>알림톡 자동 수신 연동 가이드</h3>
-                    </div>
-                    <div class="automation-steps">
-                        <div class="auto-step">
-                            <span class="step-num">1</span>
-                            <div class="step-content">
-                                <strong>MacroDroid 설치</strong>
-                                <p>구글 플레이 스토어에서 무료 안드로이드 자동화 앱인 <strong>'MacroDroid'</strong>를 설치해 주세요.</p>
-                            </div>
-                        </div>
-                        <div class="auto-step">
-                            <span class="step-num">2</span>
-                            <div class="step-content">
-                                <strong>알림 트리거 설정</strong>
-                                <p>'알림 받음' 트리거를 추가하고 대상 앱으로 <strong>'카카오톡'</strong>을 선택, 포함할 텍스트에 <strong>'체결'</strong> 또는 <strong>'매수/매도'</strong>를 입력합니다.</p>
-                            </div>
-                        </div>
-                        <div class="auto-step">
-                            <span class="step-num">3</span>
-                            <div class="step-content">
-                                <strong>HTTP POST 액션 설정</strong>
-                                <p>'HTTP 요청(POST)' 액션을 추가하고 아래의 로컬 서버 URL 주소를 입력합니다.</p>
-                                <div class="url-copy-box">
-                                    <code id="api-url-endpoint">http://192.168.0.10:5000/api/notifications</code>
-                                    <button class="btn-copy" onclick="copyEndpointText()"><i class="fa-solid fa-copy"></i> 복사</button>
-                                </div>
-                                <p style="font-size: 11px; margin-top: 4px; color: var(--text-muted);">* 갤럭시 S23과 컴퓨터가 동일한 Wi-Fi 네트워크에 연결되어 있어야 합니다.</p>
-                            </div>
-                        </div>
                         <div class="auto-step">
                             <span class="step-num">4</span>
                             <div class="step-content">
@@ -310,10 +259,6 @@
             <button class="nav-item" data-tab="tab-uploader">
                 <i class="fa-solid fa-camera"></i>
                 <span>캡쳐 등록</span>
-            </button>
-            <button class="nav-item" data-tab="tab-parser">
-                <i class="fa-solid fa-comment-sms"></i>
-                <span>알림 연동</span>
             </button>
         </nav>
     </div>
@@ -698,6 +643,6 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <script src="app.js?v=13"></script>
+    <script src="app.js?v=14"></script>
 </body>
 </html>
