@@ -633,7 +633,7 @@ function renderSVGDonutChart(stocksTotal) {
     segments.forEach((seg, index) => {
         const percentage = seg.value / total;
         const strokeLength = percentage * circumference;
-        const strokeOffset = circumference - strokeLength + currentOffset;
+        const targetOffset = -currentOffset;
 
         const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
         circle.setAttribute("cx", "110");
@@ -642,16 +642,16 @@ function renderSVGDonutChart(stocksTotal) {
         circle.className.baseVal = `donut-segment ${seg.class}`;
         circle.setAttribute("stroke", seg.color);
         
-        circle.setAttribute("stroke-dasharray", `${circumference} ${circumference}`);
+        circle.setAttribute("stroke-dasharray", `${strokeLength} ${circumference}`);
         circle.setAttribute("stroke-dashoffset", circumference.toString());
         
         setTimeout(() => {
-            circle.setAttribute("stroke-dashoffset", strokeOffset.toString());
+            circle.setAttribute("stroke-dashoffset", targetOffset.toString());
         }, 50);
 
         segmentsContainer.appendChild(circle);
         
-        currentOffset -= strokeLength;
+        currentOffset += strokeLength;
 
         // Render compact inline horizontal legend tag!
         if (seg.value > 0) {
@@ -2725,7 +2725,7 @@ function renderAnalysisDonutChart(stocksTotal) {
     segments.forEach((seg) => {
         const percentage = seg.value / stocksTotal;
         const strokeLength = percentage * circumference;
-        const strokeOffset = circumference - strokeLength + currentOffset;
+        const targetOffset = -currentOffset;
 
         const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
         circle.setAttribute("cx", "110");
@@ -2734,16 +2734,16 @@ function renderAnalysisDonutChart(stocksTotal) {
         circle.className.baseVal = `donut-segment ${seg.class}`;
         circle.setAttribute("stroke", seg.color);
         
-        circle.setAttribute("stroke-dasharray", `${circumference} ${circumference}`);
+        circle.setAttribute("stroke-dasharray", `${strokeLength} ${circumference}`);
         circle.setAttribute("stroke-dashoffset", circumference.toString());
         
         setTimeout(() => {
-            circle.setAttribute("stroke-dashoffset", strokeOffset.toString());
+            circle.setAttribute("stroke-dashoffset", targetOffset.toString());
         }, 50);
 
         segmentsContainer.appendChild(circle);
         
-        currentOffset -= strokeLength;
+        currentOffset += strokeLength;
 
         if (seg.value > 0) {
             const legendItem = document.createElement("div");
