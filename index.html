@@ -15,18 +15,14 @@
     <!-- FontAwesome for Premium Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- CSS stylesheet -->
-    <link rel="stylesheet" href="style.css?v=6">
+    <link rel="stylesheet" href="style.css?v=8">
     <!-- PWA Manifest -->
     <link rel="manifest" href="manifest.json">
 </head>
 <body>
     <div class="mobile-container">
         <!-- Safe Area Header -->
-        <header class="app-header">
-            <div class="header-logo">
-                <span class="logo-icon"><i class="fa-solid fa-chart-line-up"></i></span>
-                <h1 class="logo-title"></h1>
-            </div>
+        <header class="app-header" style="justify-content: center; border-bottom: none;">
 
             <div class="currency-toggle-container">
                 <span class="currency-label">USD</span>
@@ -69,10 +65,7 @@
                 </div>
 
                 <!-- Asset Allocation Chart Section -->
-                <div class="glass-panel animate-fade-in" style="animation-delay: 0.1s;">
-                    <div class="panel-header">
-                        <h3 class="panel-title"><i class="fa-solid fa-pie-chart text-primary"></i> 자산 포트폴리오 비중</h3>
-                    </div>
+                <div class="glass-panel text-center" style="margin-top: 10px;">
                     <div class="chart-container">
                         <!-- Custom animated SVG Chart -->
                         <div class="svg-chart-wrapper" id="donut-chart-container">
@@ -702,6 +695,6 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <script src="app.js?v=6"></script>
+    <script src="app.js?v=8"></script>
 </body>
 </html>
