@@ -383,7 +383,7 @@ function formatCurrencyDual(amount, currency) {
     const mainStr = formatCurrency(amount, currency);
     if (currency === "USD" && activeCurrency === "KRW") {
         const usdStr = `$${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-        return `${mainStr} <span style="font-size: 0.75em; color: var(--text-muted); font-weight: normal; margin-left: 4px;">(${usdStr})</span>`;
+        return `${mainStr} <span style="font-size: 0.75em; color: #6b7280; font-weight: 500; margin-left: 4px;">(${usdStr})</span>`;
     }
     return mainStr;
 }
