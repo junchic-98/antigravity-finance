@@ -1445,33 +1445,6 @@ function registerServiceWorkerLocal() {
                 firstImportedType = parsed.type === 'buy' ? '매수' : '매도';
             }
             importedCount++;
-        });
-        
-        // Save last parsed text block
-        localStorage.setItem("last_parsed_clipboard_text", text);
-        
-        if (importedCount > 0) {
-            saveLocalStorageData();
-            
-            // Consolidated Success Toast!
-            if (importedCount === 1) {
-                showToast(
-                    "클립보드 연동 완료", 
-                    `[${firstImportedBrokerage}] ${firstImportedName} ${firstImportedType} 알림이 감지되어 자동 연동되었습니다!`,
-                    "success"
-                );
-            } else {
-                showToast(
-                    "클립보드 다중 연동 완료", 
-                    `[${firstImportedBrokerage}] ${firstImportedName} 등 총 ${importedCount}건의 신규 알림이 일괄 연동되었습니다!`,
-                    "success"
-                );
-            }
-        }
-    } catch (e) {
-        console.log("Clipboard auto-scan skipped or requires user permission: ", e);
-    }
-}
 
 // Helper to check if both yesterday and today are weekends or holidays in the market's timezone.
 // Returns true when markets are closed both yesterday AND today — meaning previous_close should equal current_price.
