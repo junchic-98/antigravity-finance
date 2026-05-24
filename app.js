@@ -313,7 +313,7 @@ function loadLocalStorageData() {
             }
             if (!assetsData.summary.usd_krw_rate) assetsData.summary.usd_krw_rate = 1350.0;
             if (!assetsData.summary.gbp_krw_rate) assetsData.summary.gbp_krw_rate = 1720.0;
-            if (!assetsData.summary.app_theme) assetsData.summary.app_theme = 'obsidian';
+            if (!assetsData.summary.app_theme) assetsData.summary.app_theme = 'light';
             if (!assetsData.stocks) assetsData.stocks = [];
             if (!assetsData.transactions) assetsData.transactions = [];
             
@@ -388,6 +388,15 @@ function formatCurrencyDual(amount, currency) {
     return mainStr;
 }
 
+// Shared helper: total portfolio value in KRW (avoids duplicate calculations)
+function calcTotalKRW() {
+    const rate = assetsData.summary.usd_krw_rate || 1350.0;
+    return assetsData.stocks.reduce((total, item) => {
+        const val = item.quantity * item.current_price;
+        return total + (item.currency === "KRW" ? val : val * rate);
+    }, 0);
+}
+
 // Calculate totals and render views
 function updateUI() {
     const rate = assetsData.summary.usd_krw_rate || 1350.0;
@@ -400,14 +409,8 @@ function updateUI() {
     if (rateUsdEl) rateUsdEl.textContent = `₩${Number(usdRateVal).toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     if (rateGbpEl) rateGbpEl.textContent = `₩${Number(gbpRateVal).toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-    // Calculate total assets
-    let totalStocksKRW = 0;
-    assetsData.stocks.forEach(item => {
-        const val = item.quantity * item.current_price;
-        if (item.currency === "KRW") totalStocksKRW += val;
-        else totalStocksKRW += val * rate;
-    });
-
+    // Calculate total assets (using shared helper)
+    const totalStocksKRW = calcTotalKRW();
     const netWorthKRW = totalStocksKRW;
     
     // 1. Render Net Worth Display
@@ -485,9 +488,9 @@ function updateUI() {
                 const krwCurrent = usdCurrent * rate;
                 const krwPrev = usdPrev * rate;
                 
-                avgPriceText = `<span style="color: #e2e8f0;">₩${Math.round(krwAvg).toLocaleString()}</span> <span class="stock-detail-val usd">$${usdAvg.toFixed(2)}</span>`;
-                currentPriceText = `<span style="color: #e2e8f0;">₩${Math.round(krwCurrent).toLocaleString()}</span> <span class="stock-detail-val usd">$${usdCurrent.toFixed(2)}</span>`;
-                prevCloseText = usdPrev ? `<span style="color: #e2e8f0;">₩${Math.round(krwPrev).toLocaleString()}</span> <span class="stock-detail-val usd">$${usdPrev.toFixed(2)}</span>` : "-";
+                avgPriceText = `<span style="color: var(--text-main);">₩${Math.round(krwAvg).toLocaleString()}</span> <span class="stock-detail-val usd">$${usdAvg.toFixed(2)}</span>`;
+                currentPriceText = `<span style="color: var(--text-main);">₩${Math.round(krwCurrent).toLocaleString()}</span> <span class="stock-detail-val usd">$${usdCurrent.toFixed(2)}</span>`;
+                prevCloseText = usdPrev ? `<span style="color: var(--text-main);">₩${Math.round(krwPrev).toLocaleString()}</span> <span class="stock-detail-val usd">$${usdPrev.toFixed(2)}</span>` : "-";
             } else {
                 // If stored in KRW
                 const krwAvg = item.avg_purchase_price;
@@ -499,9 +502,9 @@ function updateUI() {
                     const usdCurrent = krwCurrent / rate;
                     const usdPrev = krwPrev / rate;
                     
-                    avgPriceText = `<span style="color: #e2e8f0;">₩${Math.round(krwAvg).toLocaleString()}</span> <span class="stock-detail-val usd">$${usdAvg.toFixed(2)}</span>`;
-                    currentPriceText = `<span style="color: #e2e8f0;">₩${Math.round(krwCurrent).toLocaleString()}</span> <span class="stock-detail-val usd">$${usdCurrent.toFixed(2)}</span>`;
-                    prevCloseText = krwPrev ? `<span style="color: #e2e8f0;">₩${Math.round(krwPrev).toLocaleString()}</span> <span class="stock-detail-val usd">$${usdPrev.toFixed(2)}</span>` : "-";
+                    avgPriceText = `<span style="color: var(--text-main);">₩${Math.round(krwAvg).toLocaleString()}</span> <span class="stock-detail-val usd">$${usdAvg.toFixed(2)}</span>`;
+                    currentPriceText = `<span style="color: var(--text-main);">₩${Math.round(krwCurrent).toLocaleString()}</span> <span class="stock-detail-val usd">$${usdCurrent.toFixed(2)}</span>`;
+                    prevCloseText = krwPrev ? `<span style="color: var(--text-main);">₩${Math.round(krwPrev).toLocaleString()}</span> <span class="stock-detail-val usd">$${usdPrev.toFixed(2)}</span>` : "-";
                 } else {
                     avgPriceText = `₩${Math.round(krwAvg).toLocaleString()}`;
                     currentPriceText = `₩${Math.round(krwCurrent).toLocaleString()}`;
@@ -1040,382 +1043,7 @@ async function submitAddTx() {
     showToast("내역 등록 성공", "거래 로그 기록 및 포트폴리오를 갱신했습니다.");
 }
 
-// --------------------------------------------------------------------------
-// PURE CLIENT-SIDE REGEX PARSING ENGINE (PORTED FROM PYTHON BACKEND)
-// --------------------------------------------------------------------------
-function parseKakaoTalkNotificationLocal(text) {
-    const textClean = text.trim();
-    
-    // 1. Special parsing for NH투자증권 (나무투자증권)
-    if (textClean.includes("NH투자증권") || textClean.includes("나무")) {
-        const isStock = textClean.includes("체결");
-        const isDeposit = textClean.includes("입금안내");
-        const isWithdraw = textClean.includes("출금안내");
-        
-        if (isStock) {
-            const type = textClean.includes("매수") ? "buy" : "sell";
-            const nameMatch = textClean.match(/종\s*목\s*명\s*:\s*(.+)/);
-            const codeMatch = textClean.match(/종목코드\s*:\s*(\w+)/);
-            const qtyMatch = textClean.match(/체결수량\s*:\s*([\d.]+)\s*주/);
-            const priceMatch = textClean.match(/체결단가\s*:\s*([\d,.]+)\s*원/);
-            
-            if (nameMatch && qtyMatch && priceMatch) {
-                const stockName = nameMatch[1].trim();
-                const ticker = codeMatch ? codeMatch[1].trim() : "KR_STK";
-                const quantity = parseFloat(qtyMatch[1]);
-                const price = parseFloat(priceMatch[1].replace(/,/g, ''));
-                
-                return {
-                    category: "stock",
-                    type: type,
-                    brokerage_or_bank: "NH투자증권",
-                    asset_name: stockName,
-                    ticker: ticker,
-                    quantity: quantity,
-                    price: price,
-                    currency: "KRW",
-                    amount: quantity * price,
-                    raw_text: text
-                };
-            }
-        } else if (isDeposit || isWithdraw) {
-            const type = isDeposit ? "deposit" : "withdraw";
-            const amountMatch = textClean.match(/금액\s*([\d,.]+)\s*원/);
-            if (amountMatch) {
-                const amount = parseInt(amountMatch[1].replace(/,/g, ''));
-                return {
-                    category: "savings",
-                    type: type,
-                    brokerage_or_bank: "NH투자증권",
-                    asset_name: "NH투자증권",
-                    quantity: null,
-                    price: null,
-                    currency: "KRW",
-                    amount: amount,
-                    raw_text: text
-                };
-            }
-        }
-    }
-    
-    // 1-2. Special parsing for 한국투자증권 (한투)
-    if (textClean.includes("한국투자증권") || textClean.includes("한투")) {
-        const isExchange = textClean.includes("외화매도환전") || textClean.includes("외화매수환전");
-        
-        if (isExchange) {
-            // Automatically update global exchange rate!
-            const rateMatch = textClean.match(/@\s*([\d,.]+)/);
-            if (rateMatch) {
-                const newRate = parseFloat(rateMatch[1].replace(/,/g, ''));
-                assetsData.summary.usd_krw_rate = newRate;
-            }
-            const isSellUsd = textClean.includes("외화매도환전");
-            const usdAmountMatch = textClean.match(/USD\s*([\d,.]+)/i);
-            const krwAmountMatch = textClean.match(/[￦₩]\s*([\d,.]+)/);
-            
-            if (usdAmountMatch && krwAmountMatch) {
-                const usdVal = parseFloat(usdAmountMatch[1].replace(/,/g, ''));
-                return {
-                    category: "savings",
-                    type: isSellUsd ? "withdraw" : "deposit",
-                    brokerage_or_bank: "한국투자증권",
-                    asset_name: isSellUsd ? "외화 환전(USD->KRW)" : "외화 환전(KRW->USD)",
-                    quantity: null,
-                    price: null,
-                    currency: "USD",
-                    amount: usdVal,
-                    raw_text: text
-                };
-            }
-        } else {
-            // Parse Stock transaction
-            const type = (textClean.includes("매수체결") || textClean.includes("매수")) && !textClean.includes("매도") ? "buy" : "sell";
-            const nameMatch = textClean.match(/\*종목명\s*:\s*(.+)/);
-            const qtyMatch = textClean.match(/\*체결수량\s*:\s*([\d.]+)\s*주/);
-            const priceMatch = textClean.match(/\*체결단가\s*:\s*(.+)/);
-            
-            if (nameMatch && qtyMatch && priceMatch) {
-                let stockName = nameMatch[1].trim();
-                let ticker = "KR_STK";
-                
-                // Extract stock code in parenthesis e.g. 삼성전자(005930) -> 삼성전자
-                const parenMatch = stockName.match(/(.+)\((\d+)\)/);
-                if (parenMatch) {
-                    stockName = parenMatch[1].trim();
-                    ticker = parenMatch[2].trim();
-                } else if (stockName.includes("/")) {
-                    // e.g. SCHB/SCHWAB US BROAD MARKET
-                    const parts = stockName.split("/");
-                    ticker = parts[0].trim();
-                    stockName = parts[1].trim();
-                }
-                
-                const quantity = parseFloat(qtyMatch[1]);
-                const priceStr = priceMatch[1].trim();
-                let price = 0.0;
-                let currency = "KRW";
-                
-                if (priceStr.toUpperCase().includes("USD") || priceStr.includes("$")) {
-                    price = parseFloat(priceStr.replace(/USD|\$/i, '').replace(/,/g, '').trim());
-                    currency = "USD";
-                } else {
-                    price = parseFloat(priceStr.replace(/원|KRW/g, '').replace(/,/g, '').trim());
-                    currency = "KRW";
-                }
-                
-                return {
-                    category: "stock",
-                    type: type,
-                    brokerage_or_bank: "한국투자증권",
-                    asset_name: stockName,
-                    ticker: ticker,
-                    quantity: quantity,
-                    price: price,
-                    currency: currency,
-                    amount: quantity * price,
-                    raw_text: text
-                };
-            }
-        }
-    }
-    
-    // 2. Identify General Brokerage or Bank
-    let brokerageBank = "알수없음";
-    const brokerageMatch = textClean.match(/\[(.*?(?:증권|은행|투자|카드|패스|머니|토스))\]/);
-    if (brokerageMatch) {
-        brokerageBank = brokerageMatch[1];
-    } else {
-        const keywords = ["토스증권", "한국투자증권", "신한투자증권", "키움증권", "KB증권", "미래에셋", "신한은행", "국민은행", "우리은행", "하나은행", "카카오뱅크", "토스뱅크"];
-        for (let kw of keywords) {
-            if (textClean.includes(kw)) {
-                brokerageBank = kw;
-                break;
-            }
-        }
-    }
 
-    // 3. Determine General Transaction Type
-    let txType = null;
-    if (["매수", "체결(매수)", "구매완료", "사자"].some(k => textClean.includes(k))) {
-        txType = "buy";
-    } else if (["매도", "체결(매도)", "판매완료", "팔자"].some(k => textClean.includes(k))) {
-        txType = "sell";
-    } else if (["입금", "이체받음", "송금받음", "입금완료"].some(k => textClean.includes(k))) {
-        txType = "deposit";
-    } else if (["출금", "이체보냄", "송금완료", "출금완료"].some(k => textClean.includes(k))) {
-        txType = "withdraw";
-    }
-
-    if (!txType) return null;
-
-    // 4. Handle Stocks (Buy / Sell)
-    if (txType === "buy" || txType === "sell") {
-        const qtyMatch = textClean.match(/([\d.]+)\s*주/);
-        const quantity = qtyMatch ? parseFloat(qtyMatch[1]) : 1.0;
-
-        let price = 0.0;
-        let currency = "KRW";
-
-        const usdPriceMatch = textClean.match(/([\d,.]+)\s*(?:USD|\$|달러)/i);
-        const krwPriceMatch = textClean.match(/([\d,.]+)\s*(?:원|KRW)/);
-        const prefixPriceMatch = textClean.match(/(?:체결가|체결단가|단가|체결금액|가)\s*[:\s]*([\d,.]+)/);
-
-        if (usdPriceMatch) {
-            price = parseFloat(usdPriceMatch[1].replace(/,/g, ''));
-            currency = "USD";
-        } else if (krwPriceMatch) {
-            price = parseFloat(krwPriceMatch[1].replace(/,/g, ''));
-            currency = "KRW";
-        } else if (prefixPriceMatch) {
-            price = parseFloat(prefixPriceMatch[1].replace(/,/g, ''));
-            if (textClean.includes("$") || textClean.toUpperCase().includes("USD")) {
-                currency = "USD";
-            } else {
-                currency = "KRW";
-            }
-        }
-
-        // Extract Stock Name
-        let stockName = "알수없는주식";
-        const nameMatch = textClean.match(/([가-힣A-Za-z0-9\s\.\&\-]+?)\s+\d+(?:\.\d+)?\s*주/);
-        if (nameMatch) {
-            let candidate = nameMatch[1].replace(/\[.*?\]/g, '').trim();
-            const words = candidate.split(/\s+/);
-            stockName = words[words.length - 1] || candidate;
-        } else {
-            const words = textClean.split(/\s+/);
-            for (let i = 0; i < words.length; i++) {
-                if (words[i].includes("주") && i > 0) {
-                    stockName = words[i-1].replace('[', '').replace(']', '');
-                    break;
-                }
-            }
-        }
-
-        return {
-            category: "stock",
-            type: txType,
-            brokerage_or_bank: brokerageBank,
-            asset_name: stockName,
-            quantity: quantity,
-            price: price,
-            currency: currency,
-            amount: Math.round(quantity * price * 100) / 100,
-            raw_text: text
-        };
-    } 
-    // 5. Handle Bank Deposits / Withdrawals
-    else if (txType === "deposit" || txType === "withdraw") {
-        let amount = 0;
-        let currency = "KRW";
-
-        const amountMatch = textClean.match(/([\d,]+)\s*(?:원|KRW|\$|USD)/i);
-        if (amountMatch) {
-            amount = parseInt(amountMatch[1].replace(/,/g, ''));
-            if (textClean.includes("$") || textClean.toUpperCase().includes("USD")) {
-                currency = "USD";
-            }
-        } else {
-            const numbers = textClean.match(/[\d,]+/g);
-            if (numbers) {
-                const cleanNums = numbers.map(n => parseInt(n.replace(/,/g, ''))).filter(n => n > 100);
-                if (cleanNums.length > 0) {
-                    amount = Math.max(...cleanNums);
-                }
-            }
-        }
-
-        return {
-            category: "savings",
-            type: txType,
-            brokerage_or_bank: brokerageBank,
-            asset_name: brokerageBank,
-            quantity: null,
-            price: null,
-            currency: currency,
-            amount: amount,
-            raw_text: text
-        };
-    }
-
-    return null;
-}
-
-// Parse KakaoTalk message pasted manually (Serverless mode)
-async function handleParseClipboard() {
-    const text = document.getElementById("paste-input").value.trim();
-    if (!text) {
-        showToast("알림톡 입력 필수", "메시지를 붙여넣은 후 다시 시도해 주세요.", "error");
-        return;
-    }
-
-    const parsed = parseKakaoTalkNotificationLocal(text);
-    if (!parsed) {
-        showToast("분석 불가", "알림 문구를 분석할 수 없습니다. 형식을 확인해 주세요.", "error");
-        return;
-    }
-
-    // --- DEDUPLICATION ENGINE ---
-    const normalizeName = (name) => name.replace(/[^A-Za-z0-9가-힣]/g, '').toLowerCase();
-    const isDuplicate = assetsData.transactions.some(tx => {
-        const timeDiff = Date.now() - new Date(tx.date).getTime();
-        if (timeDiff > 108000000) return false; // 30 hours threshold
-        
-        const sameBrokerage = tx.brokerage_or_bank === parsed.brokerage_or_bank;
-        const sameType = tx.type === parsed.type;
-        const sameQty = tx.quantity === parsed.quantity;
-        const samePrice = Math.abs(tx.price - parsed.price) < 0.01;
-        
-        const name1 = normalizeName(tx.asset_name);
-        const name2 = normalizeName(parsed.asset_name);
-        const sameName = name1.includes(name2) || name2.includes(name1);
-        
-        return sameBrokerage && sameType && sameQty && samePrice && sameName;
-    });
-    
-    if (isDuplicate) {
-        showToast("중복 거래 감지", "이미 등록된 체결 건이므로 이중 등록을 방지했습니다. (중복 방지 필터 작동)", "info");
-        document.getElementById("paste-input").value = "";
-        return;
-    }
-
-    // 1. Add Transaction Log
-    const newTx = {
-        id: `tx_${Date.now()}`,
-        date: new Date().toISOString(),
-        type: parsed.type,
-        category: parsed.category,
-        asset_name: parsed.asset_name,
-        brokerage_or_bank: parsed.brokerage_or_bank,
-        quantity: parsed.quantity,
-        price: parsed.price,
-        amount: parsed.amount,
-        currency: parsed.currency
-    };
-    assetsData.transactions.unshift(newTx);
-
-    // 2. Update holdings
-    if (parsed.category === "stock") {
-        let stockFound = false;
-        for (let stock of assetsData.stocks) {
-            if ((stock.name.toLowerCase() === parsed.asset_name.toLowerCase() || 
-                 stock.ticker.toLowerCase() === parsed.asset_name.toLowerCase()) && 
-                stock.brokerage === parsed.brokerage_or_bank) {
-                
-                const qtyBefore = stock.quantity;
-                const priceBefore = stock.avg_purchase_price;
-                const qtyChange = parsed.quantity;
-                const txPrice = parsed.price;
-
-                if (parsed.type === "buy") {
-                    const newQty = qtyBefore + qtyChange;
-                    if (newQty > 0) {
-                        stock.avg_purchase_price = Math.round(((qtyBefore * priceBefore) + (qtyChange * txPrice)) / newQty * 100) / 100;
-                    }
-                    stock.quantity = newQty;
-                } else if (parsed.type === "sell") {
-                    stock.quantity = Math.max(0, qtyBefore - qtyChange);
-                }
-                stock.current_price = txPrice;
-                stockFound = true;
-                break;
-            }
-        }
-
-        if (!stockFound && parsed.type === "buy") {
-            let tickerGuess = parsed.asset_name.toUpperCase();
-            if (!/^[A-Z0-9]+$/.test(tickerGuess)) {
-                tickerGuess = "KR_STK";
-            }
-            assetsData.stocks.push({
-                id: `stock_${Date.now()}`,
-                brokerage: parsed.brokerage_or_bank,
-                name: parsed.asset_name,
-                ticker: tickerGuess,
-                quantity: parsed.quantity,
-                avg_purchase_price: parsed.price,
-                current_price: parsed.price,
-                currency: parsed.currency
-            });
-        }
-    }
-
-
-
-    document.getElementById("paste-input").value = "";
-    saveLocalStorageData();
-    showToast("자동 분석 성공", `[${parsed.brokerage_or_bank}] ${parsed.asset_name} 내역이 안전하게 연동되었습니다!`);
-}
-
-// Copy guide text helper
-function copyEndpointText() {
-    const text = document.getElementById("api-url-endpoint").textContent;
-    navigator.clipboard.writeText(text).then(() => {
-        showToast("클립보드 복사", "MacroDroid 복사 액션 구문이 복사되었습니다.");
-    }).catch(err => {
-        console.error("Copy failed", err);
-    });
-}
 
 // --------------------------------------------------------------------------
 // CLIENT-SIDE HIGH-FIDELITY SCREENSHOT SCANNER (SERVERLESS)
@@ -1718,7 +1346,7 @@ async function submitScanConfirm() {
 // --------------------------------------------------------------------------
 function setupBackupAndRestore() {
     // Inject backup controls into the parser tab dynamically to save space!
-    const parserPane = document.getElementById("tab-parser");
+    const parserPane = document.getElementById("tab-uploader");
     const backupContainer = document.createElement("div");
     backupContainer.className = "glass-panel";
     backupContainer.style.marginTop = "20px";
@@ -1787,12 +1415,12 @@ function registerServiceWorkerLocal() {
     // Generate minimal Service Worker inline for seamless PWA execution!
     if ('serviceWorker' in navigator) {
         const swBlob = new Blob([`
-            const CACHE_NAME = 'antigravity-finance-v9';
+            const CACHE_NAME = 'antigravity-finance-v16';
             const ASSETS = [
                 './',
                 './index.html',
                 './style.css',
-                './app.js?v=9'
+                './app.js?v=16'
             ];
             self.addEventListener('install', e => {
                 e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
@@ -1809,120 +1437,6 @@ function registerServiceWorkerLocal() {
     }
 }
 
-// --------------------------------------------------------------------------
-// ZERO-GESTURE CLIPBOARD AUTO-SCAN ENGINE
-// Automatically scans clipboard on window focus or tap and imports matching transactions
-// --------------------------------------------------------------------------
-async function autoScanClipboard() {
-    try {
-        if (!navigator.clipboard || !navigator.clipboard.readText) {
-            return;
-        }
-        
-        const text = await navigator.clipboard.readText();
-        if (!text) return;
-        
-        // Prevent continuous infinite parsing of the same text block
-        const lastParsed = localStorage.getItem("last_parsed_clipboard_text");
-        if (text === lastParsed) return;
-        
-        // 1. SPLIT-PARSING ENGINE: Split text by brokerage headers or years (e.g. 2026년)
-        // Using positive lookahead to keep the headers in each split chunk!
-        const chunks = text.split(/(?=\[(?:NH투자증권|한국투자증권|토스증권|신한투자증권|키움증권|신한은행|국민은행|KB증권|KB국민은행|우리은행|하나은행|카카오뱅크)\]|202\d년\s*\d+월)/);
-        
-        let importedCount = 0;
-        let firstImportedName = "";
-        let firstImportedBrokerage = "";
-        let firstImportedType = "";
-        
-        // Process each chunk in sequence
-        chunks.forEach(chunk => {
-            const chunkTrimmed = chunk.trim();
-            if (!chunkTrimmed) return;
-            
-            const parsed = parseKakaoTalkNotificationLocal(chunkTrimmed);
-            if (!parsed) return;
-            
-            // Check for duplicates within last 30 hours
-            const normalizeName = (name) => name.replace(/[^A-Za-z0-9가-힣]/g, '').toLowerCase();
-            const isDuplicate = assetsData.transactions.some(tx => {
-                const timeDiff = Date.now() - new Date(tx.date).getTime();
-                if (timeDiff > 108000000) return false;
-                
-                const sameBrokerage = tx.brokerage_or_bank === parsed.brokerage_or_bank;
-                const sameType = tx.type === parsed.type;
-                const sameQty = tx.quantity === parsed.quantity;
-                const samePrice = Math.abs(tx.price - parsed.price) < 0.01;
-                
-                const name1 = normalizeName(tx.asset_name);
-                const name2 = normalizeName(parsed.asset_name);
-                const sameName = name1.includes(name2) || name2.includes(name1);
-                
-                return sameBrokerage && sameType && sameQty && samePrice && sameName;
-            });
-            
-            if (isDuplicate) return; // Skip duplicates silently
-            
-            // Automatically Import!
-            const newTx = {
-                id: `tx_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-                date: new Date().toISOString(),
-                type: parsed.type,
-                category: parsed.category,
-                asset_name: parsed.asset_name,
-                brokerage_or_bank: parsed.brokerage_or_bank,
-                quantity: parsed.quantity,
-                price: parsed.price,
-                amount: parsed.amount,
-                currency: parsed.currency
-            };
-            
-            assetsData.transactions.unshift(newTx);
-            
-            // Update holdings
-            if (parsed.category === "stock") {
-                let stockFound = false;
-                for (let stock of assetsData.stocks) {
-                    if ((stock.name.toLowerCase() === parsed.asset_name.toLowerCase() || 
-                         stock.ticker.toLowerCase() === parsed.asset_name.toLowerCase()) && 
-                        stock.brokerage === parsed.brokerage_or_bank) {
-                        
-                        const qtyBefore = stock.quantity;
-                        const priceBefore = stock.avg_purchase_price;
-                        const qtyChange = parsed.quantity;
-                        const txPrice = parsed.price;
-
-                        if (parsed.type === "buy") {
-                            const newQty = qtyBefore + qtyChange;
-                            if (newQty > 0) {
-                                stock.avg_purchase_price = Math.round(((qtyBefore * priceBefore) + (qtyChange * txPrice)) / newQty * 100) / 100;
-                            }
-                            stock.quantity = newQty;
-                        } else if (parsed.type === "sell") {
-                            stock.quantity = Math.max(0, qtyBefore - qtyChange);
-                        }
-                        stock.current_price = txPrice;
-                        stockFound = true;
-                        break;
-                    }
-                }
-                if (!stockFound && parsed.type === "buy") {
-                    let tickerGuess = parsed.asset_name.toUpperCase();
-                    if (!/^[A-Z0-9]+$/.test(tickerGuess)) {
-                        tickerGuess = "KR_STK";
-                    }
-                    assetsData.stocks.push({
-                        id: `stock_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-                        brokerage: parsed.brokerage_or_bank,
-                        name: parsed.asset_name,
-                        ticker: tickerGuess,
-                        quantity: parsed.quantity,
-                        avg_purchase_price: parsed.price,
-                        current_price: parsed.price,
-                        currency: parsed.currency
-                    });
-                }
-            }
 
             
             if (importedCount === 0) {
@@ -2144,7 +1658,7 @@ window.addEventListener("DOMContentLoaded", () => {
     loadLocalStorageData();
 
     // 1.1 Initialize App Theme Engine
-    const savedTheme = assetsData.summary.app_theme || "obsidian";
+    const savedTheme = assetsData.summary.app_theme || "light";
     setAppTheme(savedTheme);
 
     // 2. Setup Navbar
@@ -2168,12 +1682,6 @@ window.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // 4. Setup manual clipboard notification parser button
-    const btnParsePaste = document.getElementById("btn-parse-paste");
-    if (btnParsePaste) {
-        btnParsePaste.addEventListener("click", handleParseClipboard);
-    }
-
     // 5. Setup file upload drag & drop listeners
     setupUploader();
 
@@ -2189,38 +1697,6 @@ window.addEventListener("DOMContentLoaded", () => {
         syncBtn.addEventListener("click", updateStockPrices);
     }
 
-    // Configure MacroDroid Clipboard helper guide description
-    const guideBox = document.getElementById("api-url-endpoint");
-    if (guideBox) {
-        guideBox.textContent = "클립보드에 카톡 알림 내용 복사 액션";
-    }
-    
-    // Modify S23 MacroDroid Step 3 to reflect clipboard automation!
-    const steps = document.querySelectorAll(".auto-step");
-    if (steps.length >= 3) {
-        const step3Content = steps[2].querySelector(".step-content");
-        if (step3Content) {
-            step3Content.innerHTML = `
-                <strong>알림 내용 클립보드에 복사</strong>
-                <p>컴퓨터 서버가 없는 독립 어플이므로, MacroDroid 액션에서 <strong>'클립보드에 텍스트 복사'</strong>를 선택하고 <code>{not_message}</code>를 입력합니다.</p>
-                <div class="url-copy-box">
-                    <code id="api-url-endpoint">카카오톡 체결 알림 자동 복사</code>
-                    <button class="btn-copy" onclick="showToast('알림 복사 가이드', '알림 수신 시 내용이 클립보드에 자동 저장됩니다!')"><i class="fa-solid fa-info-circle"></i> 정보</button>
-                </div>
-                <p style="font-size: 11px; margin-top: 4px; color: var(--text-muted);">* 이렇게 하면 주식 알림이 수신되는 즉시 폰 클립보드에 자동 저장되며, 어플을 켜고 붙여넣기만 누르면 즉시 포트폴리오가 갱신됩니다!</p>
-            `;
-        }
-        const step4 = steps[3];
-        if (step4) {
-            step4.style.display = "none"; // Hide standard JSON POST instructions since it is now clipboard-based!
-        }
-    }
-
-    // 8. Bind Clipboard Auto-Scan Engine
-    window.addEventListener("focus", autoScanClipboard);
-    document.addEventListener("click", autoScanClipboard);
-    // Execute after a short delay on initial load
-    setTimeout(autoScanClipboard, 800);
     // 8.5 Immediately render the UI synchronously so the app loads instantly!
     updateUI();
 
@@ -2625,13 +2101,7 @@ function switchAnalysisView(view) {
 function renderAnalysisViews() {
     const rate = assetsData.summary.usd_krw_rate || 1350.0;
     
-    let totalStocksKRW = 0;
-    assetsData.stocks.forEach(item => {
-        const val = item.quantity * item.current_price;
-        if (item.currency === "KRW") totalStocksKRW += val;
-        else totalStocksKRW += val * rate;
-    });
-
+    const totalStocksKRW = calcTotalKRW();
     const grandTotal = totalStocksKRW;
 
     renderAnalysisDonutChart(totalStocksKRW);
