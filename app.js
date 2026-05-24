@@ -2645,7 +2645,11 @@ function renderAnalysisViews() {
         
         assetsData.stocks.forEach(item => {
             const val = item.quantity * item.current_price * (item.currency === "USD" ? rate : 1);
-            if (item.currency === "USD") usdTotal += val;
+            const isUS = item.currency === "USD" || 
+                         (item.name && item.name.match(/미국|나스닥|S&P|다우존스|빅테크|애플|엔비디아|테슬라/i)) || 
+                         item.ticker === "418660" || item.ticker === "465580" || item.ticker === "458730";
+                         
+            if (isUS) usdTotal += val;
             else krwTotal += val;
         });
         
