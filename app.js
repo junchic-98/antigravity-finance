@@ -1456,75 +1456,100 @@ async function handleScreenshotFileLocal(file) {
     const stepText = document.getElementById("scan-step-text");
     
     loader.style.display = "flex";
+    stepText.textContent = "AI 비전 엔진 초기화 및 언어 팩 로드 중... (최초 1회 시 시간이 소요됩니다)";
     
-    const steps = [
-        "이미지 고해상도 변환 및 이진화 적용 중...",
-        "금융사 앱 템플릿(토스/신한/KB) 레이아웃 검출 중...",
-        "계좌 번호 및 소수점 보유 주식량 판독 중...",
-        "자산 정보의 텍스트 세부 구조화 구성 중..."
-    ];
-
-    let currentStep = 0;
-    const interval = setInterval(() => {
-        if (currentStep < steps.length - 1) {
-            currentStep++;
-            stepText.textContent = steps[currentStep];
+    try {
+        if (typeof Tesseract === "undefined") {
+            alert("OCR 엔진을 불러오지 못했습니다. 네트워크 상태를 확인하거나 페이지를 새로고침 해주세요.");
+            loader.style.display = "none";
+            return;
         }
-    }, 900);
 
-    // Mock client-side smart OCR prediction based on file name or arbitrary upload
-    const filenameLower = file.name.toLowerCase();
-    let detectedData = {
-        "institution": "토스증권",
-        "type": "stock",
-        "extracted_items": [
-            {"name": "Apple Inc.", "ticker": "AAPL", "quantity": 10, "price": 180.20, "currency": "USD"},
-            {"name": "삼성전자", "ticker": "005930", "quantity": 25, "price": 72500.0, "currency": "KRW"}
-        ]
-    };
+        // Run Tesseract.js OCR (Kor + Eng)
+        const result = await Tesseract.recognize(
+            file,
+            'kor+eng',
+            { logger: m => {
+                if (m.status === "recognizing text") {
+                    stepText.textContent = `카카오톡 알림 텍스트 판독 중... (${Math.round(m.progress * 100)}%)`;
+                }
+            }}
+        );
 
-    if (filenameLower.includes("toss") || filenameLower.includes("토스")) {
-        detectedData = {
-            "institution": "토스증권",
+        const text = result.data.text;
+        console.log("OCR Extracted Text:", text);
+        
+        stepText.textContent = "금융 데이터 추출 및 자산 구조화 중...";
+
+        let detectedData = {
+            "institution": "기타증권",
             "type": "stock",
-            "extracted_items": [
-                {"name": "NVIDIA Corp.", "ticker": "NVDA", "quantity": 15, "price": 120.50, "currency": "USD"},
-                {"name": "삼성전자", "ticker": "005930", "quantity": 50, "price": 73200.0, "currency": "KRW"}
-            ]
+            "extracted_items": []
         };
-    } else if (filenameLower.includes("shinhan") || filenameLower.includes("신한")) {
-        detectedData = {
-            "institution": "신한은행",
-            "type": "savings",
-            "extracted_items": [
-                {"account_name": "신한 주거래 우대통장", "account_number": "110-388-123456", "balance": 4820000, "currency": "KRW"}
-            ]
-        };
-    } else if (filenameLower.includes("kb") || filenameLower.includes("국민")) {
-        detectedData = {
-            "institution": "KB국민은행",
-            "type": "savings",
-            "extracted_items": [
-                {"account_name": "KB 스타트 통장", "account_number": "045-21-0888-291", "balance": 12400000, "currency": "KRW"}
-            ]
-        };
-    } else if (filenameLower.includes("korea") || filenameLower.includes("한투") || filenameLower.includes("한국투자")) {
-        detectedData = {
-            "institution": "한국투자증권",
-            "type": "stock",
-            "extracted_items": [
-                {"name": "카카오", "ticker": "035720", "quantity": 30, "price": 48500.0, "currency": "KRW"},
-                {"name": "Tesla Inc.", "ticker": "TSLA", "quantity": 8, "price": 182.20, "currency": "USD"}
-            ]
-        };
+        
+        // Detect Brokerage
+        if (text.includes("나무증권") || text.includes("나무")) detectedData.institution = "나무증권";
+        else if (text.includes("한국투자") || text.includes("한국 투자") || text.includes("한투")) detectedData.institution = "한국투자증권";
+        else if (text.includes("토스") || text.includes("toss")) detectedData.institution = "토스증권";
+        else if (text.includes("KB") || text.includes("국민")) detectedData.institution = "KB증권";
+        else if (text.includes("미래에셋")) detectedData.institution = "미래에셋증권";
+        else if (text.includes("삼성증권")) detectedData.institution = "삼성증권";
+        
+        let stockName = "알 수 없음";
+        let quantity = 0;
+        let price = 0;
+        
+        // Specific Key-Value Regex Matching
+        const nameMatch = text.match(/(?:종목명|종목)\s*[:\-]?\s*([가-힣a-zA-Z0-9\s]+?)(?=\n|$|체결|수량|단가)/i);
+        const qtyMatch = text.match(/(?:체결수량|매수수량|수량)\s*[:\-]?\s*([0-9,]+)/i);
+        const priceMatch = text.match(/(?:체결단가|매수단가|단가|금액|가격)\s*[:\-]?\s*([0-9,]+(?:\.[0-9]+)?)/i);
+
+        if (nameMatch) stockName = nameMatch[1].trim();
+        if (qtyMatch) quantity = parseInt(qtyMatch[1].replace(/,/g, ''), 10);
+        if (priceMatch) price = parseFloat(priceMatch[1].replace(/,/g, ''));
+
+        // Fallback Regex for Natural Text (e.g., "10주", "72,000원")
+        if (quantity === 0) {
+            const fallbackQty = text.match(/([0-9,]+)\s*(?:주|주 체결|개)/);
+            if (fallbackQty) quantity = parseInt(fallbackQty[1].replace(/,/g, ''), 10);
+        }
+        if (price === 0) {
+            const fallbackPrice = text.match(/([0-9,]+(?:\.[0-9]+)?)\s*(?:원|달러|USD)/);
+            if (fallbackPrice) price = parseFloat(fallbackPrice[1].replace(/,/g, ''));
+        }
+        
+        let currency = "KRW";
+        if (text.includes("USD") || text.includes("달러") || text.includes("미국") || stockName.match(/^[a-zA-Z\s]+$/)) {
+            currency = "USD";
+        }
+        
+        if (quantity > 0 && price > 0) {
+            detectedData.extracted_items.push({
+                "name": stockName !== "알 수 없음" ? stockName : "추출된 종목",
+                "ticker": "", 
+                "quantity": quantity,
+                "price": price,
+                "currency": currency
+            });
+        } else {
+            detectedData.extracted_items.push({
+                "name": stockName !== "알 수 없음" ? stockName : "인식 실패 - 수동 수정 필요",
+                "ticker": "",
+                "quantity": quantity || 1,
+                "price": price || 1000,
+                "currency": currency
+            });
+            alert("알림톡 내용을 완벽하게 스캔하지 못했습니다. 수동으로 값을 입력해주세요.");
+        }
+        
+        loader.style.display = "none";
+        openScanConfirmModal(detectedData);
+
+    } catch (err) {
+        console.error("OCR Error", err);
+        alert("이미지 처리 중 오류가 발생했습니다. 다시 시도해주세요.");
+        loader.style.display = "none";
     }
-
-    // Wait at least 3 seconds for premium scanner UX flow
-    await new Promise(resolve => setTimeout(resolve, 3600));
-    clearInterval(interval);
-    loader.style.display = "none";
-
-    openScanConfirmModal(detectedData);
 }
 
 function openScanConfirmModal(detectedData) {
