@@ -4,14 +4,14 @@
    ========================================================================== */
 
 :root {
-    --bg-main: radial-gradient(circle at 50% 0%, #151a30 0%, #0a0c16 100%);
-    --bg-obsidian: #080a12;
-    --glass-bg: rgba(20, 26, 46, 0.6);
-    --glass-border: rgba(255, 255, 255, 0.07);
+    --bg-main: #121212;
+    --bg-obsidian: #000000;
+    --glass-bg: rgba(28, 28, 30, 0.7);
+    --glass-border: rgba(255, 255, 255, 0.08);
     --glass-highlight: rgba(255, 255, 255, 0.12);
     
     /* Neon Palettes */
-    --color-primary: #3b82f6;       /* Electric Blue */
+    --color-primary: #0a84ff;       /* iOS Blue */
     --color-primary-glow: rgba(59, 130, 246, 0.35);
     --color-secondary: #8b5cf6;     /* Purple Aura */
     --color-secondary-glow: rgba(139, 92, 246, 0.3);
@@ -92,8 +92,7 @@ body {
 /* --- App Header --- */
 .app-header {
     height: var(--header-height);
-    background: rgba(10, 12, 22, 0.85);
-    backdrop-filter: blur(12px);
+    background: transparent;
     display: flex;
     align-items: center;
     justify-content: space-between;
