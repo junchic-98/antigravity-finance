@@ -1495,49 +1495,83 @@ async function handleScreenshotFileLocal(file) {
         else if (text.includes("미래에셋")) detectedData.institution = "미래에셋증권";
         else if (text.includes("삼성증권")) detectedData.institution = "삼성증권";
         
-        let stockName = "알 수 없음";
-        let quantity = 0;
-        let price = 0;
+        let remainingText = text;
         
-        // Specific Key-Value Regex Matching
-        const nameMatch = text.match(/(?:종목명|종목)\s*[:\-]?\s*([가-힣a-zA-Z0-9\s]+?)(?=\n|$|체결|수량|단가)/i);
-        const qtyMatch = text.match(/(?:체결수량|매수수량|수량)\s*[:\-]?\s*([0-9,]+)/i);
-        const priceMatch = text.match(/(?:체결단가|매수단가|단가|금액|가격)\s*[:\-]?\s*([0-9,]+(?:\.[0-9]+)?)/i);
+        while (remainingText.length > 0) {
+            let stockName = "알 수 없음";
+            let quantity = 0;
+            let price = 0;
+            let foundAny = false;
+            
+            // Specific Key-Value Regex Matching
+            const nameMatch = remainingText.match(/(?:종목명|종목)\s*[:\-]?\s*([가-힣a-zA-Z0-9\s]+?)(?=\n|$|체결|수량|단가)/i);
+            const qtyMatch = remainingText.match(/(?:체결수량|매수수량|수량)\s*[:\-]?\s*([0-9,]+)/i);
+            const priceMatch = remainingText.match(/(?:체결단가|매수단가|단가|금액|가격)\s*[:\-]?\s*([0-9,]+(?:\.[0-9]+)?)/i);
 
-        if (nameMatch) stockName = nameMatch[1].trim();
-        if (qtyMatch) quantity = parseInt(qtyMatch[1].replace(/,/g, ''), 10);
-        if (priceMatch) price = parseFloat(priceMatch[1].replace(/,/g, ''));
+            if (nameMatch) {
+                stockName = nameMatch[1].trim();
+                remainingText = remainingText.replace(nameMatch[0], "");
+                foundAny = true;
+            }
+            if (qtyMatch) {
+                quantity = parseInt(qtyMatch[1].replace(/,/g, ''), 10);
+                remainingText = remainingText.replace(qtyMatch[0], "");
+                foundAny = true;
+            }
+            if (priceMatch) {
+                price = parseFloat(priceMatch[1].replace(/,/g, ''));
+                remainingText = remainingText.replace(priceMatch[0], "");
+                foundAny = true;
+            }
 
-        // Fallback Regex for Natural Text (e.g., "10주", "72,000원")
-        if (quantity === 0) {
-            const fallbackQty = text.match(/([0-9,]+)\s*(?:주|주 체결|개)/);
-            if (fallbackQty) quantity = parseInt(fallbackQty[1].replace(/,/g, ''), 10);
-        }
-        if (price === 0) {
-            const fallbackPrice = text.match(/([0-9,]+(?:\.[0-9]+)?)\s*(?:원|달러|USD)/);
-            if (fallbackPrice) price = parseFloat(fallbackPrice[1].replace(/,/g, ''));
+            // Fallback Regex for Natural Text (e.g., "10주", "72,000원")
+            if (quantity === 0) {
+                const fallbackQty = remainingText.match(/([0-9,]+)\s*(?:주|주 체결|개)/);
+                if (fallbackQty) {
+                    quantity = parseInt(fallbackQty[1].replace(/,/g, ''), 10);
+                    remainingText = remainingText.replace(fallbackQty[0], "");
+                    foundAny = true;
+                }
+            }
+            if (price === 0) {
+                const fallbackPrice = remainingText.match(/([0-9,]+(?:\.[0-9]+)?)\s*(?:원|달러|USD)/);
+                if (fallbackPrice) {
+                    price = parseFloat(fallbackPrice[1].replace(/,/g, ''));
+                    remainingText = remainingText.replace(fallbackPrice[0], "");
+                    foundAny = true;
+                }
+            }
+            
+            // If absolutely nothing was found in this pass, break the loop
+            if (!foundAny) {
+                break;
+            }
+
+            let currency = "KRW";
+            if (text.includes("USD") || text.includes("달러") || text.includes("미국") || stockName.match(/^[a-zA-Z\s]+$/)) {
+                currency = "USD";
+            }
+            
+            // Only add if we actually extracted meaningful numbers or a name
+            if (quantity > 0 || price > 0 || stockName !== "알 수 없음") {
+                detectedData.extracted_items.push({
+                    "name": stockName !== "알 수 없음" ? stockName : "추출된 종목",
+                    "ticker": "", 
+                    "quantity": quantity > 0 ? quantity : 1,
+                    "price": price > 0 ? price : 1000,
+                    "currency": currency
+                });
+            }
         }
         
-        let currency = "KRW";
-        if (text.includes("USD") || text.includes("달러") || text.includes("미국") || stockName.match(/^[a-zA-Z\s]+$/)) {
-            currency = "USD";
-        }
-        
-        if (quantity > 0 && price > 0) {
+        // If the entire text yielded absolutely nothing
+        if (detectedData.extracted_items.length === 0) {
             detectedData.extracted_items.push({
-                "name": stockName !== "알 수 없음" ? stockName : "추출된 종목",
-                "ticker": "", 
-                "quantity": quantity,
-                "price": price,
-                "currency": currency
-            });
-        } else {
-            detectedData.extracted_items.push({
-                "name": stockName !== "알 수 없음" ? stockName : "인식 실패 - 수동 수정 필요",
+                "name": "인식 실패 - 수동 수정 필요",
                 "ticker": "",
-                "quantity": quantity || 1,
-                "price": price || 1000,
-                "currency": currency
+                "quantity": 1,
+                "price": 1000,
+                "currency": "KRW"
             });
             alert("알림톡 내용을 완벽하게 스캔하지 못했습니다. 수동으로 값을 입력해주세요.");
         }
