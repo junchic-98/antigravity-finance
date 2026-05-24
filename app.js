@@ -378,6 +378,16 @@ function formatCurrency(amount, currency) {
     }
 }
 
+// Format numbers nicely with dual currency for foreign stocks
+function formatCurrencyDual(amount, currency) {
+    const mainStr = formatCurrency(amount, currency);
+    if (currency === "USD" && activeCurrency === "KRW") {
+        const usdStr = `$${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        return `${mainStr} <span style="font-size: 0.75em; color: var(--text-muted); font-weight: normal; margin-left: 4px;">(${usdStr})</span>`;
+    }
+    return mainStr;
+}
+
 // Calculate totals and render views
 function updateUI() {
     const rate = assetsData.summary.usd_krw_rate || 1350.0;
@@ -2236,7 +2246,7 @@ function openStockDrawer(stock) {
     const profitPct = purchaseTotal > 0 ? (profitVal / purchaseTotal) * 100 : 0;
     const isProfit = profitVal >= 0;
     
-    document.getElementById("drawer-current-price").innerHTML = formatCurrency(stock.current_price, stock.currency);
+    document.getElementById("drawer-current-price").innerHTML = formatCurrencyDual(stock.current_price, stock.currency);
     
     const dailyBadge = document.getElementById("drawer-daily-change");
     const prevCloseLabel = document.getElementById("drawer-prev-close-text");
@@ -2257,7 +2267,7 @@ function openStockDrawer(stock) {
         } else {
             dailyBadge.textContent = "0.00%";
         }
-        prevCloseLabel.textContent = `어제 ${formatCurrency(stock.previous_close, stock.currency)}`;
+        prevCloseLabel.innerHTML = `어제 ${formatCurrencyDual(stock.previous_close, stock.currency)}`;
     } else {
         dailyBadge.textContent = "0.00%";
         dailyBadge.className = "price-change-badge flat";
@@ -2270,13 +2280,13 @@ function openStockDrawer(stock) {
     profitAmountEl.className = isProfit ? "drawer-profit-amount text-success" : "drawer-profit-amount text-danger";
     profitPercentEl.className = isProfit ? "drawer-profit-percent text-success" : "drawer-profit-percent text-danger";
     
-    profitAmountEl.textContent = `${isProfit ? '+' : ''}${formatCurrency(profitVal, stock.currency)}`;
+    profitAmountEl.innerHTML = `${isProfit ? '+' : ''}${formatCurrencyDual(profitVal, stock.currency)}`;
     profitPercentEl.textContent = `${isProfit ? '+' : ''}${profitPct.toFixed(2)}%`;
 
     document.getElementById("drawer-stat-qty").textContent = `${stock.quantity.toLocaleString()}주`;
-    document.getElementById("drawer-stat-avg-price").innerHTML = formatCurrency(stock.avg_purchase_price, stock.currency);
-    document.getElementById("drawer-stat-purchase-total").innerHTML = formatCurrency(purchaseTotal, stock.currency);
-    document.getElementById("drawer-stat-current-total").innerHTML = formatCurrency(currentTotal, stock.currency);
+    document.getElementById("drawer-stat-avg-price").innerHTML = formatCurrencyDual(stock.avg_purchase_price, stock.currency);
+    document.getElementById("drawer-stat-purchase-total").innerHTML = formatCurrencyDual(purchaseTotal, stock.currency);
+    document.getElementById("drawer-stat-current-total").innerHTML = formatCurrencyDual(currentTotal, stock.currency);
 
     // Clear sparkline path/area/dots & set range to "조회 중..."
     const chartRangeEl = document.getElementById("drawer-chart-range");
