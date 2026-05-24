@@ -4,27 +4,27 @@
    ========================================================================== */
 
 :root {
-    --bg-main: #121212;
-    --bg-obsidian: #000000;
-    --glass-bg: rgba(28, 28, 30, 0.7);
-    --glass-border: rgba(255, 255, 255, 0.08);
-    --glass-highlight: rgba(255, 255, 255, 0.12);
+    --bg-main: #f5f5f7;
+    --bg-obsidian: #ffffff;
+    --glass-bg: rgba(255, 255, 255, 0.85);
+    --glass-border: rgba(0, 0, 0, 0.05);
+    --glass-highlight: rgba(255, 255, 255, 0.5);
     
     /* Neon Palettes */
-    --color-primary: #0a84ff;       /* iOS Blue */
-    --color-primary-glow: rgba(59, 130, 246, 0.35);
-    --color-secondary: #8b5cf6;     /* Purple Aura */
-    --color-secondary-glow: rgba(139, 92, 246, 0.3);
-    --color-accent: #06b6d4;        /* Cyan Neon */
-    --color-success: #10b981;       /* Emerald Growth */
-    --color-success-glow: rgba(16, 185, 129, 0.2);
-    --color-danger: #ef4444;        /* Crimson Sell */
-    --color-danger-glow: rgba(239, 68, 68, 0.2);
+    --color-primary: #007aff;       /* iOS Blue */
+    --color-primary-glow: rgba(0, 122, 255, 0.15);
+    --color-secondary: #5856d6;     /* iOS Purple */
+    --color-secondary-glow: rgba(88, 86, 214, 0.15);
+    --color-accent: #34c759;        /* iOS Green */
+    --color-success: #34c759;       /* Emerald Growth */
+    --color-success-glow: rgba(52, 199, 89, 0.15);
+    --color-danger: #ff3b30;        /* Crimson Sell */
+    --color-danger-glow: rgba(255, 59, 48, 0.15);
     
     /* Typography */
-    --text-main: #f8fafc;
-    --text-muted: #94a3b8;
-    --text-dim: #64748b;
+    --text-main: #1d1d1f;
+    --text-muted: #86868b;
+    --text-dim: #a1a1a6;
     --font-heading: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
     --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     
@@ -391,13 +391,13 @@ input:checked + .slider:before {
 }
 
 .net-worth-amount {
-    font-family: var(--font-heading);
-    font-size: clamp(28px, 8vw, 42px);
+    font-family: var(--font-body);
+    font-size: clamp(32px, 9vw, 44px);
     font-weight: 800;
     margin: 8px 0;
-    letter-spacing: -1px;
-    color: #ffffff;
-    text-shadow: 0 0 30px rgba(0, 210, 255, 0.4), 0 2px 8px rgba(0,0,0,0.6);
+    letter-spacing: 0.5px;
+    color: var(--text-main);
+    text-shadow: 0 2px 8px rgba(0,0,0,0.1);
     line-height: 1.1;
 }
 
@@ -444,8 +444,8 @@ input:checked + .slider:before {
 
 .svg-chart-wrapper {
     position: relative;
-    width: 140px;
-    height: 140px;
+    width: 200px;
+    height: 200px;
 }
 
 .donut-svg {
@@ -462,8 +462,8 @@ input:checked + .slider:before {
 
 .donut-segment {
     fill: none;
-    stroke-width: 10;
-    stroke-linecap: round;
+    stroke-width: 12;
+    stroke-linecap: butt;
     transition: stroke-dasharray 1.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
