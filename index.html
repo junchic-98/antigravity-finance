@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Antigravity Finance - 개인 자산 관리</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Cache busting to prevent mobile Chrome cache issues -->
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <!-- FontAwesome for Premium Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- CSS stylesheet -->
+    <link rel="stylesheet" href="style.css?v=3">
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+</head>
+<body>
+    <div class="mobile-container">
+        <!-- Safe Area Header -->
+        <header class="app-header">
+            <div class="header-logo">
+                <span class="logo-icon"><i class="fa-solid fa-chart-line-up"></i></span>
+                <h1 class="logo-title"></h1>
+            </div>
+
+            <div class="currency-toggle-container">
+                <span class="currency-label">USD</span>
+                <label class="switch">
+                    <input type="checkbox" id="currency-toggle" checked>
+                    <span class="slider round"></span>
+                </label>
+                <span class="currency-label active">KRW</span>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="app-content" id="scroll-container">
+            <!-- TAB 1: DASHBOARD -->
+            <section id="tab-dashboard" class="tab-pane active">
+                <!-- Net Worth Card -->
+                <div class="net-worth-card animate-fade-in">
+                    <span class="card-subtitle">총 순자산 (Net Worth)</span>
+                    <h2 class="net-worth-amount" id="net-worth-display">₩0</h2>
+                    <div class="net-worth-change">
+                        <span class="change-badge positive">
+                            <i class="fa-solid fa-caret-up"></i> +4.2%
+                        </span>
+                        <span class="change-period">지난달 대비</span>
+                    </div>
+                </div>
+
+                <!-- Premium Exchange Rate Panel (USD & GBP) -->
+                <div class="exchange-rate-panel animate-fade-in" style="animation-delay: 0.05s; display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border); border-radius: 14px; margin-bottom: 20px; font-size: 11px;">
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <span style="color: var(--text-dim);">🇺🇸 USD/KRW</span>
+                        <span id="rate-usd-krw" style="font-weight: 700; color: #00d2ff; font-family: var(--font-heading);">₩1,350.00</span>
+                    </div>
+                    <div style="width: 1px; height: 12px; background: var(--glass-border);"></div>
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <span style="color: var(--text-dim);">🇬🇧 GBP/KRW</span>
+                        <span id="rate-gbp-krw" style="font-weight: 700; color: #a78bfa; font-family: var(--font-heading);">₩1,720.00</span>
+                    </div>
+                    <button onclick="openExchangeRateModal()" style="background: none; border: none; color: var(--color-primary); cursor: pointer; font-size: 13px;" title="환율 편집"><i class="fa-solid fa-pen-to-square"></i></button>
+                </div>
+
+                <!-- Asset Allocation Chart Section -->
+                <div class="glass-panel animate-fade-in" style="animation-delay: 0.1s;">
+                    <div class="panel-header">
+                        <h3 class="panel-title"><i class="fa-solid fa-pie-chart text-primary"></i> 자산 포트폴리오 비중</h3>
+                    </div>
+                    <div class="chart-container">
+                        <!-- Custom animated SVG Chart -->
+                        <div class="svg-chart-wrapper" id="donut-chart-container">
+                            <svg width="220" height="220" viewBox="0 0 220 220" class="donut-svg">
+                                <circle cx="110" cy="110" r="80" class="donut-bg" />
+                                <g id="donut-segments"></g>
+                                <circle cx="110" cy="110" r="58" class="donut-hole" />
+                            </svg>
+                            <div class="chart-center-text">
+                                <span class="chart-center-val" id="chart-center-percentage">100%</span>
+                                <span class="chart-center-label">자산 비중</span>
+                            </div>
+                        </div>
+                        <div class="chart-legend" id="chart-legend-container">
+                            <!-- JS will inject legends here -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="asset-category-section animate-fade-in" style="animation-delay: 0.2s;">
+                    <div class="section-header">
+                        <h3 class="section-title">증권사 주식</h3>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn-add-manual" id="btn-sync-prices" style="background: rgba(var(--color-primary-rgb), 0.1); color: #00d2ff; border: 1px solid rgba(0, 210, 255, 0.25);"><i class="fa-solid fa-rotate"></i> 시세 갱신</button>
+                            <button class="btn-add-manual" onclick="openAddAssetModal('stock')"><i class="fa-solid fa-plus"></i> 추가</button>
+                        </div>
+                    </div>
+                    <div class="asset-cards-grid" id="stocks-list">
+                        <!-- JS injected stocks -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 5: PORTFOLIO ANALYSIS OVERHAUL -->
+            <section id="tab-analysis" class="tab-pane">
+                <div class="section-header">
+                    <h2 class="page-title"><i class="fa-solid fa-chart-pie text-accent"></i> 포트폴리오 분석</h2>
+                </div>
+                <p class="section-desc">보유 자산의 구성 비중을 국가별, 섹터별로 쪼개어 글로잉 바 게이지를 통해 비주얼적으로 상세히 분석합니다.</p>
+                
+                <!-- View Filter Selector -->
+                <div class="filters-container" style="margin-bottom: 16px;">
+                    <button class="filter-btn active" id="btn-analysis-stock" onclick="switchAnalysisView('stock')">종목별</button>
+                    <button class="filter-btn" id="btn-analysis-country" onclick="switchAnalysisView('country')">국가별</button>
+                    <button class="filter-btn" id="btn-analysis-sector" onclick="switchAnalysisView('sector')">섹터별</button>
+                </div>
+                
+                <!-- Subview 1: Stock Allocation -->
+                <div class="glass-panel" id="analysis-stock-view">
+                    <div class="panel-header">
+                        <h3 class="panel-title"><i class="fa-solid fa-chart-simple text-primary"></i> 개별 주식 종목별 비중</h3>
+                    </div>
+                    <div class="chart-container" style="flex-direction: column; gap: 20px; align-items: center;">
+                        <div class="svg-chart-wrapper" id="analysis-donut-container" style="width: 150px; height: 150px;">
+                            <svg width="220" height="220" viewBox="0 0 220 220" class="donut-svg" style="transform: rotate(-90deg); width: 100%; height: 100%;">
+                                <circle cx="110" cy="110" r="80" class="donut-bg" />
+                                <g id="analysis-donut-segments"></g>
+                                <circle cx="110" cy="110" r="58" class="donut-hole" />
+                            </svg>
+                            <div class="chart-center-text">
+                                <span class="chart-center-val" id="analysis-chart-center-percentage">100%</span>
+                                <span class="chart-center-label">주식 비중</span>
+                            </div>
+                        </div>
+                        <div class="chart-legend" id="analysis-chart-legend-container" style="width: 100%;">
+                            <!-- Dynamic legends horizontal inline -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Subview 2: Country Allocation -->
+                <div class="glass-panel" id="analysis-country-view" style="display: none;">
+                    <div class="panel-header">
+                        <h3 class="panel-title"><i class="fa-solid fa-earth-americas text-accent"></i> 국가별 자산 비중 (KRW / USD)</h3>
+                    </div>
+                    <div class="gauge-list" id="analysis-country-list" style="display: flex; flex-direction: column; gap: 16px; width: 100%;">
+                        <!-- JS generated Horizontal progress bars -->
+                    </div>
+                </div>
+                
+                <!-- Subview 3: Sector Allocation -->
+                <div class="glass-panel" id="analysis-sector-view" style="display: none;">
+                    <div class="panel-header">
+                        <h3 class="panel-title"><i class="fa-solid fa-cubes text-secondary"></i> 투자 섹터별 구성 비중</h3>
+                    </div>
+                    <div class="gauge-list" id="analysis-sector-list" style="display: flex; flex-direction: column; gap: 16px; width: 100%;">
+                        <!-- JS generated Sector progress bars -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 2: TRANSACTIONS -->
+            <section id="tab-transactions" class="tab-pane">
+                <div class="section-header">
+                    <h2 class="page-title"><i class="fa-solid fa-receipt text-secondary"></i> 자산 거래 내역</h2>
+                    <button class="btn-primary btn-sm" onclick="openAddTxModal()"><i class="fa-solid fa-plus"></i> 내역 추가</button>
+                </div>
+                
+                <!-- Premium Search & Date Filter Bar -->
+                <div class="search-filter-bar" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; background: rgba(255,255,255,0.01); border: 1px solid var(--glass-border); padding: 12px; border-radius: 16px;">
+                    <div style="position: relative; width: 100%;">
+                        <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-dim); font-size: 12px;"></i>
+                        <input type="text" id="input-tx-search" placeholder="종목 또는 금융사 검색..." style="width: 100%; padding: 8px 12px 8px 32px; background: rgba(0,0,0,0.25); border: 1px solid var(--glass-border); border-radius: 10px; color: var(--text-main); font-size: 11px; outline: none;" oninput="renderTransactions()">
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <input type="date" id="input-tx-start" style="flex: 1; padding: 6px 10px; background: rgba(0,0,0,0.25); border: 1px solid var(--glass-border); border-radius: 8px; color: var(--text-muted); font-size: 10px;" onchange="renderTransactions()">
+                        <span style="font-size: 10px; color: var(--text-dim);">~</span>
+                        <input type="date" id="input-tx-end" style="flex: 1; padding: 6px 10px; background: rgba(0,0,0,0.25); border: 1px solid var(--glass-border); border-radius: 8px; color: var(--text-muted); font-size: 10px;" onchange="renderTransactions()">
+                        <button onclick="resetTxFilters()" style="background: none; border: none; color: var(--color-accent); font-size: 10px; cursor: pointer; font-weight: 600;"><i class="fa-solid fa-rotate-left"></i> 초기화</button>
+                    </div>
+                </div>
+                
+                <!-- Filters -->
+                <div class="filters-container" style="margin-top: 0; margin-bottom: 14px;">
+                    <button class="filter-btn active" onclick="filterTransactions('all')">전체</button>
+                    <button class="filter-btn" onclick="filterTransactions('buy')">매수</button>
+                    <button class="filter-btn" onclick="filterTransactions('sell')">매도</button>
+                    <button class="filter-btn" onclick="filterTransactions('deposit')">입적금</button>
+                </div>
+
+                <div class="transactions-timeline" id="transactions-list">
+                    <!-- JS injected transactions -->
+                </div>
+            </section>
+
+            <!-- TAB 3: SCREENSHOT IMPORT -->
+            <section id="tab-uploader" class="tab-pane">
+                <div class="section-header">
+                    <h2 class="page-title"><i class="fa-solid fa-camera text-accent"></i> 스크린샷 자산 등록</h2>
+                </div>
+                
+                <p class="section-desc">주식 잔고 캡쳐를 업로드하여 자산을 분석하고 등록합니다.</p>
+
+                <!-- Drag & Drop Area -->
+                <div class="upload-dropzone" id="upload-zone">
+                    <div class="upload-icon-pulse">
+                        <i class="fa-solid fa-cloud-arrow-up"></i>
+                    </div>
+                    <h3>금융사 스크린샷 선택</h3>
+                    <p>또는 화면을 드래그하여 여기에 놓으세요</p>
+                    <input type="file" id="screenshot-input" accept="image/*" style="display: none;">
+                    <button class="btn-primary" onclick="document.getElementById('screenshot-input').click()"><i class="fa-solid fa-image"></i> 사진 불러오기</button>
+                </div>
+
+                <!-- Simulation Info Cards -->
+                <div class="glass-panel" style="margin-top: 20px;">
+                    <h4 class="panel-subtitle" style="margin-bottom: 10px;"><i class="fa-solid fa-circle-info"></i> 분석 가능한 예시 캡쳐</h4>
+                    <ul class="example-list">
+                        <li><i class="fa-solid fa-check text-success"></i> 주식: 토스증권, 한국투자증권 보유 주식 잔고 화면</li>
+                    </ul>
+                </div>
+
+                <!-- Scan Loading Overlay -->
+                <div class="scan-overlay" id="scan-loading" style="display: none;">
+                    <div class="scan-scanner"></div>
+                    <div class="scan-spinner">
+                        <div class="spinner-core"></div>
+                    </div>
+                    <h3 class="scan-title">AI 이미지 분석 중...</h3>
+                    <p class="scan-step" id="scan-step-text">계좌 및 주식 텍스트 영역 검출 중...</p>
+                </div>
+            </section>
+
+            <!-- TAB 4: KAKAOTALK PARSER HUB -->
+            <section id="tab-parser" class="tab-pane">
+                <div class="section-header">
+                    <h2 class="page-title"><i class="fa-solid fa-comment-sms text-primary"></i> 카카오톡 알림톡 연동</h2>
+                </div>
+                <p class="section-desc">갤럭시 S23에 수신된 주식 체결 알림톡을 자동으로 분석하여 실시간으로 자산 포트폴리오를 업데이트합니다.</p>
+
+                <!-- Manual Clipboard Paste Box -->
+                <div class="glass-panel">
+                    <div class="panel-header">
+                        <h3 class="panel-title"><i class="fa-solid fa-paste"></i> 체결 알림톡 직접 붙여넣기</h3>
+                    </div>
+                    <div class="paste-container">
+                        <textarea class="textarea-paste" id="paste-input" placeholder="여기에 카카오톡 알림 메시지를 붙여넣어 보세요.&#10;예) [토스증권] AAPL 5주 매수 완료 (체결단가: 180.50 USD)"></textarea>
+                        <button class="btn-accent w-full" id="btn-parse-paste"><i class="fa-solid fa-bolt"></i> 즉시 분석 및 자산 반영</button>
+                    </div>
+                </div>
+
+                <!-- Automation Instruction Card -->
+                <div class="automation-card">
+                    <div class="automation-header">
+                        <span class="android-badge"><i class="fa-brands fa-android"></i> Galaxy S23</span>
+                        <h3>알림톡 자동 수신 연동 가이드</h3>
+                    </div>
+                    <div class="automation-steps">
+                        <div class="auto-step">
+                            <span class="step-num">1</span>
+                            <div class="step-content">
+                                <strong>MacroDroid 설치</strong>
+                                <p>구글 플레이 스토어에서 무료 안드로이드 자동화 앱인 <strong>'MacroDroid'</strong>를 설치해 주세요.</p>
+                            </div>
+                        </div>
+                        <div class="auto-step">
+                            <span class="step-num">2</span>
+                            <div class="step-content">
+                                <strong>알림 트리거 설정</strong>
+                                <p>'알림 받음' 트리거를 추가하고 대상 앱으로 <strong>'카카오톡'</strong>을 선택, 포함할 텍스트에 <strong>'체결'</strong> 또는 <strong>'매수/매도'</strong>를 입력합니다.</p>
+                            </div>
+                        </div>
+                        <div class="auto-step">
+                            <span class="step-num">3</span>
+                            <div class="step-content">
+                                <strong>HTTP POST 액션 설정</strong>
+                                <p>'HTTP 요청(POST)' 액션을 추가하고 아래의 로컬 서버 URL 주소를 입력합니다.</p>
+                                <div class="url-copy-box">
+                                    <code id="api-url-endpoint">http://192.168.0.10:5000/api/notifications</code>
+                                    <button class="btn-copy" onclick="copyEndpointText()"><i class="fa-solid fa-copy"></i> 복사</button>
+                                </div>
+                                <p style="font-size: 11px; margin-top: 4px; color: var(--text-muted);">* 갤럭시 S23과 컴퓨터가 동일한 Wi-Fi 네트워크에 연결되어 있어야 합니다.</p>
+                            </div>
+                        </div>
+                        <div class="auto-step">
+                            <span class="step-num">4</span>
+                            <div class="step-content">
+                                <strong>JSON 본문 설정</strong>
+                                <p>POST 본문 콘텐츠 타입을 <code>application/json</code>으로 정하고 다음과 같이 파라미터를 구성합니다:</p>
+                                <pre class="code-block">{"text": "{not_message}"}</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Bottom Navigation Bar (Optimized for Galaxy S23 Thumb Reach) -->
+        <nav class="app-navbar">
+            <button class="nav-item active" data-tab="tab-dashboard">
+                <i class="fa-solid fa-gauge-high"></i>
+                <span>대시보드</span>
+            </button>
+            <button class="nav-item" data-tab="tab-analysis">
+                <i class="fa-solid fa-chart-pie"></i>
+                <span>분석</span>
+            </button>
+            <button class="nav-item" data-tab="tab-transactions">
+                <i class="fa-solid fa-receipt"></i>
+                <span>거래 내역</span>
+            </button>
+            <button class="nav-item" data-tab="tab-uploader">
+                <i class="fa-solid fa-camera"></i>
+                <span>캡쳐 등록</span>
+            </button>
+            <button class="nav-item" data-tab="tab-parser">
+                <i class="fa-solid fa-comment-sms"></i>
+                <span>알림 연동</span>
+            </button>
+        </nav>
+    </div>
+
+    <!-- MODAL 1: ADD MANUAL ASSET -->
+    <div class="modal-overlay" id="modal-add-asset" style="display: none;">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 class="modal-title" id="asset-modal-title">자산 수동 등록</h3>
+                <button class="modal-close" onclick="closeModal('modal-add-asset')"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="asset-type-hidden">
+                
+                <!-- Common fields -->
+                <div class="form-group" id="group-institution">
+                    <label class="form-label" id="label-institution">금융사명</label>
+                    <input type="text" class="form-input" id="input-institution" placeholder="예: 신한은행, 토스증권">
+                </div>
+
+
+                <!-- Stock fields -->
+                <div id="stock-only-fields" style="display: none;">
+                    <div class="form-group">
+                        <label class="form-label">주식명</label>
+                        <input type="text" class="form-input" id="input-stock-name" placeholder="예: 삼성전자, Apple">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">티커 기호 (선택)</label>
+                        <input type="text" class="form-input" id="input-stock-ticker" placeholder="예: 005930, AAPL">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-6">
+                            <label class="form-label">보유 수량</label>
+                            <input type="number" class="form-input" id="input-stock-qty" placeholder="수량" step="any">
+                        </div>
+                        <div class="form-group col-6">
+                            <label class="form-label">평균 매수 단가</label>
+                            <input type="number" class="form-input" id="input-stock-buy-price" placeholder="매수가">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Financial Balance & Currency -->
+                <div class="form-row">
+                    <div class="form-group col-7" id="group-balance-input">
+                        <label class="form-label" id="label-balance">금액 (잔고/현재가)</label>
+                        <input type="number" class="form-input" id="input-balance" placeholder="금액 입력">
+                    </div>
+                    <div class="form-group col-5">
+                        <label class="form-label">통화</label>
+                        <select class="form-select" id="input-currency">
+                            <option value="KRW">KRW (₩)</option>
+                            <option value="USD">USD ($)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeModal('modal-add-asset')">취소</button>
+                <button class="btn-primary" onclick="submitAddAsset()">등록</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 2: ADD MANUAL TRANSACTION -->
+    <div class="modal-overlay" id="modal-add-tx" style="display: none;">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 class="modal-title">거래 내역 직접 등록</h3>
+                <button class="modal-close" onclick="closeModal('modal-add-tx')"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row">
+                    <div class="form-group col-6">
+                        <label class="form-label">거래 분류</label>
+                        <select class="form-select" id="input-tx-category" onchange="toggleTxCategoryFields()">
+                            <option value="stock">증권사 주식</option>
+                        </select>
+                    </div>
+                    <div class="form-group col-6">
+                        <label class="form-label">거래 종류</label>
+                        <select class="form-select" id="input-tx-type">
+                            <!-- Dynamic options -->
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group col-6">
+                        <label class="form-label">금융기관 / 증권사</label>
+                        <input type="text" class="form-input" id="input-tx-brokerage" placeholder="예: 토스증권">
+                    </div>
+                    <div class="form-group col-6">
+                        <label class="form-label" id="label-tx-asset-name">자산 / 주식명</label>
+                        <input type="text" class="form-input" id="input-tx-asset-name" placeholder="예: 삼성전자">
+                    </div>
+                </div>
+
+                <!-- Stock transaction fields -->
+                <div id="tx-stock-fields">
+                    <div class="form-row">
+                        <div class="form-group col-6">
+                            <label class="form-label">수량 (주)</label>
+                            <input type="number" class="form-input" id="input-tx-qty" placeholder="수량 입력" step="any">
+                        </div>
+                        <div class="form-group col-6">
+                            <label class="form-label">단가</label>
+                            <input type="number" class="form-input" id="input-tx-price" placeholder="체결가 입력">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group col-7" id="group-tx-amount">
+                        <label class="form-label">총 거래금액</label>
+                        <input type="number" class="form-input" id="input-tx-amount" placeholder="금액 입력">
+                    </div>
+                    <div class="form-group col-5">
+                        <label class="form-label">거래 통화</label>
+                        <select class="form-select" id="input-tx-currency">
+                            <option value="KRW">KRW (₩)</option>
+                            <option value="USD">USD ($)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeModal('modal-add-tx')">취소</button>
+                <button class="btn-primary" onclick="submitAddTx()">등록</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 3: SCREENSHOT RESULT VERIFICATION -->
+    <div class="modal-overlay" id="modal-scan-confirm" style="display: none;">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 class="modal-title"><i class="fa-solid fa-magnifying-glass-chart text-success"></i> 캡쳐 분석 결과 확인</h3>
+                <button class="modal-close" onclick="closeModal('modal-scan-confirm')"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-subtitle">이미지에서 추출된 아래의 내역을 확인해 주세요. 오차가 있을 경우 수정한 후 승인하십시오.</p>
+                
+                <div class="form-group">
+                    <label class="form-label">분석된 기관</label>
+                    <input type="text" class="form-input" id="scan-confirm-institution">
+                </div>
+
+                <div class="scan-items-container" id="scan-confirm-items">
+                    <!-- JS generated fields based on scanned items -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeModal('modal-scan-confirm')">재업로드</button>
+                <button class="btn-primary" onclick="submitScanConfirm()"><i class="fa-solid fa-check"></i> 자산 포트폴리오 반영</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 4: EXCHANGE RATE EDIT -->
+    <div class="modal-overlay" id="modal-edit-rates" style="display: none;">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 class="modal-title"><i class="fa-solid fa-calculator text-primary"></i> 실시간 환율 수동 조정</h3>
+                <button class="modal-close" onclick="closeModal('modal-edit-rates')"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-subtitle">영국 현지 거주 및 다중 통화 자산 관리를 위해 달러(USD) 및 파운드(GBP)의 원화 환율을 조정합니다.</p>
+                
+                <div class="form-group">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <label class="form-label">🇺🇸 USD/KRW 환율 (1 달러)</label>
+                        <span id="val-usd-slider" style="font-weight: 700; color: #00d2ff; font-family: var(--font-heading);">1,350원</span>
+                    </div>
+                    <input type="range" class="form-input" id="slider-usd-krw" min="1000" max="1800" step="1" value="1350" oninput="document.getElementById('val-usd-slider').textContent = Number(this.value).toLocaleString() + '원'; document.getElementById('input-usd-krw').value = this.value;">
+                    <input type="number" class="form-input" id="input-usd-krw" value="1350" style="margin-top: 6px;" oninput="document.getElementById('slider-usd-krw').value = this.value; document.getElementById('val-usd-slider').textContent = Number(this.value).toLocaleString() + '원';">
+                </div>
+
+                <div class="form-group" style="margin-top: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <label class="form-label">🇬🇧 GBP/KRW 환율 (1 파운드)</label>
+                        <span id="val-gbp-slider" style="font-weight: 700; color: #a78bfa; font-family: var(--font-heading);">1,720원</span>
+                    </div>
+                    <input type="range" class="form-input" id="slider-gbp-krw" min="1300" max="2200" step="1" value="1720" oninput="document.getElementById('val-gbp-slider').textContent = Number(this.value).toLocaleString() + '원'; document.getElementById('input-gbp-krw').value = this.value;">
+                    <input type="number" class="form-input" id="input-gbp-krw" value="1720" style="margin-top: 6px;" oninput="document.getElementById('slider-gbp-krw').value = this.value; document.getElementById('val-gbp-slider').textContent = Number(this.value).toLocaleString() + '원';">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeModal('modal-edit-rates')">취소</button>
+                <button class="btn-primary" onclick="submitExchangeRates()">적용 및 재계산</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- STOCK DETAIL BOTTOM DRAWER -->
+    <div class="drawer-overlay" id="stock-detail-drawer" style="display: none;" onclick="closeStockDrawer(event)">
+        <div class="drawer-card" onclick="event.stopPropagation()">
+            <div class="drawer-handle"></div>
+            <div class="drawer-header">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span id="drawer-stock-icon"></span>
+                    <h3 class="drawer-title" id="drawer-stock-name">주식 상세 정보</h3>
+                    <span class="brokerage-badge default" id="drawer-stock-brokerage">증권사</span>
+                </div>
+                <button class="modal-close" onclick="closeStockDrawer()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="drawer-body">
+                <div class="drawer-overview">
+                    <div class="drawer-price-block">
+                        <span class="drawer-current-price" id="drawer-current-price">₩0</span>
+                        <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
+                            <span class="price-change-badge flat" id="drawer-daily-change">0.00%</span>
+                            <span class="drawer-previous-close-label" id="drawer-prev-close-text">어제 ₩0</span>
+                        </div>
+                    </div>
+                    <div class="drawer-profit-block" style="text-align: right;">
+                        <span class="drawer-profit-amount" id="drawer-profit-amount">₩0</span>
+                        <span class="drawer-profit-percent text-success" id="drawer-profit-percent">+0.00%</span>
+                    </div>
+                </div>
+
+                <!-- 5-day Sparkline SVG Chart Container -->
+                <div class="glass-panel" style="margin-top: 15px; padding: 12px 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="font-size: 11px; font-weight: 600; color: var(--text-muted);"><i class="fa-solid fa-chart-line text-accent"></i> 최근 5일간 트렌드 (Sparkline)</span>
+                        <span id="drawer-chart-range" style="font-size: 10px; color: var(--text-dim);">조회 중...</span>
+                    </div>
+                    <div class="sparkline-container" style="height: 60px; width: 100%;">
+                        <svg id="sparkline-svg" viewBox="0 0 300 60" style="width: 100%; height: 100%; overflow: visible;">
+                            <defs>
+                                <linearGradient id="sparkline-grad" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stop-color="var(--color-primary)" stop-opacity="0.4"/>
+                                    <stop offset="100%" stop-color="var(--color-primary)" stop-opacity="0"/>
+                                </linearGradient>
+                            </defs>
+                            <path id="sparkline-area" d="" fill="url(#sparkline-grad)"></path>
+                            <path id="sparkline-path" d="" fill="none" stroke="var(--color-primary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+                            <g id="sparkline-dots"></g>
+                        </svg>
+                    </div>
+                </div>
+
+                <div class="drawer-stats-grid">
+                    <div class="drawer-stat-card">
+                        <span class="drawer-stat-label">보유 수량</span>
+                        <span class="drawer-stat-value" id="drawer-stat-qty">0주</span>
+                    </div>
+                    <div class="drawer-stat-card">
+                        <span class="drawer-stat-label">평균 매수 단가</span>
+                        <span class="drawer-stat-value" id="drawer-stat-avg-price">₩0</span>
+                    </div>
+                    <div class="drawer-stat-card">
+                        <span class="drawer-stat-label">총 매수 금액</span>
+                        <span class="drawer-stat-value" id="drawer-stat-purchase-total">₩0</span>
+                    </div>
+                    <div class="drawer-stat-card">
+                        <span class="drawer-stat-label">평가 금액</span>
+                        <span class="drawer-stat-value" id="drawer-stat-current-total">₩0</span>
+                    </div>
+                </div>
+
+                <!-- Direct Edit Form (Collapsible) -->
+                <div class="glass-panel" style="margin-top: 15px; padding: 12px 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleDrawerEditForm()">
+                        <span style="font-size: 11px; font-weight: 600; color: var(--text-muted);"><i class="fa-solid fa-pen-to-square text-accent"></i> 보유 주식 정보 직접 수정하기</span>
+                        <i class="fa-solid fa-chevron-down" id="drawer-edit-chevron" style="font-size: 10px; color: var(--text-dim); transition: transform 0.2s;"></i>
+                    </div>
+                    <div id="drawer-edit-form" style="display: none; margin-top: 12px; border-top: 1px solid var(--border-color); padding-top: 12px;">
+                        <div class="form-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                            <div class="form-group">
+                                <label class="form-label" style="font-size: 10px; margin-bottom: 4px;">보유 수량 (주)</label>
+                                <input type="number" class="form-input" id="edit-stock-qty" step="any" style="font-size: 11px; padding: 8px;">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" style="font-size: 10px; margin-bottom: 4px;">평균 매수 단가</label>
+                                <input type="number" class="form-input" id="edit-stock-price" step="any" style="font-size: 11px; padding: 8px;">
+                            </div>
+                        </div>
+                        <div class="form-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+                            <div class="form-group">
+                                <label class="form-label" style="font-size: 10px; margin-bottom: 4px;">거래 통화</label>
+                                <select class="form-input" id="edit-stock-currency" style="font-size: 11px; padding: 8px; background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 8px;">
+                                    <option value="KRW">원화 (KRW)</option>
+                                    <option value="USD">달러 (USD)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" style="font-size: 10px; margin-bottom: 4px;">티커 (Ticker)</label>
+                                <input type="text" class="form-input" id="edit-stock-ticker" style="font-size: 11px; padding: 8px;">
+                            </div>
+                        </div>
+                        <button class="btn-primary w-full" style="font-size: 11px; padding: 10px; background: linear-gradient(135deg, var(--color-primary), var(--color-accent));" onclick="saveDrawerStockEdit()"><i class="fa-solid fa-check"></i> 수정사항 적용 및 저장</button>
+                    </div>
+                </div>
+
+                <button class="btn-secondary w-full" id="btn-drawer-delete-stock" style="margin-top: 15px; border-color: rgba(239, 68, 68, 0.2); color: var(--color-danger); background: rgba(239, 68, 68, 0.05); font-size: 12px; padding: 10px;" onclick="handleDrawerDeleteStock()"><i class="fa-solid fa-trash"></i> 이 종목 포트폴리오에서 삭제</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 5: LUXURY TRANSACTION RECEIPT -->
+    <div class="modal-overlay" id="modal-tx-receipt" style="display: none;" onclick="closeModal('modal-tx-receipt')">
+        <div class="receipt-card animate-slide-up" onclick="event.stopPropagation()">
+            <div class="receipt-serrated-top"></div>
+            <div class="receipt-body">
+                <div class="receipt-header">
+                    <span class="receipt-brand-logo"><i class="fa-solid fa-chart-line-up"></i></span>
+                    <h3 class="receipt-brand-title">ANTIGRAVITY STORES</h3>
+                    <p class="receipt-brand-subtitle">Official Transaction Statement</p>
+                </div>
+                
+                <div class="receipt-divider"></div>
+                
+                <table class="receipt-meta-table">
+                    <tr>
+                        <td class="meta-label">거래 일시:</td>
+                        <td class="meta-value" id="receipt-date">2026-05-23 22:49</td>
+                    </tr>
+                    <tr>
+                        <td class="meta-label">거래 번호:</td>
+                        <td class="meta-value" id="receipt-tx-id" style="font-family: monospace;">TX-1779572424</td>
+                    </tr>
+                    <tr>
+                        <td class="meta-label">거래 기관:</td>
+                        <td class="meta-value" id="receipt-brokerage">한국투자증권</td>
+                    </tr>
+                </table>
+                
+                <div class="receipt-divider"></div>
+                
+                <div class="receipt-bill-details">
+                    <div style="display: flex; justify-content: space-between; font-weight: 700; font-size: 11px; margin-bottom: 6px; color: var(--text-main);">
+                        <span>품목 및 내역</span>
+                        <span>금액</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;">
+                        <span id="receipt-item-name" style="font-weight: 600;">삼성전자 매수</span>
+                        <span id="receipt-total-amount" style="font-weight: 700;">₩9,733,450</span>
+                    </div>
+                    <div id="receipt-sub-details" style="font-size: 10px; color: var(--text-dim); margin-bottom: 8px;">
+                        63 주 × ₩154,499.21
+                    </div>
+                </div>
+                
+                <div class="receipt-divider"></div>
+                
+                <div class="receipt-memo-section">
+                    <label class="form-label" style="display: flex; align-items: center; gap: 4px; color: var(--color-primary);"><i class="fa-solid fa-pen-to-square"></i> 거래 개인 매매 메모</label>
+                    <textarea class="textarea-paste" id="receipt-memo-input" placeholder="이 거래에 대한 매매 비하인드나 특이사항을 기록해 두세요..." style="height: 60px; font-size: 11px; margin-top: 4px; background: rgba(0,0,0,0.15); border-radius: 8px;"></textarea>
+                </div>
+                
+                <div class="receipt-divider" style="margin-top: 15px;"></div>
+                
+                <div class="receipt-barcode-container">
+                    <div class="barcode" id="receipt-barcode-lines"></div>
+                    <span class="barcode-number" id="receipt-barcode-text">20260523224901</span>
+                </div>
+            </div>
+            
+            <div class="receipt-footer">
+                <button class="btn-secondary" onclick="closeModal('modal-tx-receipt')">닫기</button>
+                <button class="btn-primary" onclick="saveReceiptMemo()"><i class="fa-solid fa-circle-check"></i> 메모 저장</button>
+            </div>
+            <div class="receipt-serrated-bottom"></div>
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFICATION FOR REAL-TIME EVENTS -->
+    <div id="toast" class="toast-notification" style="display: none;">
+        <div class="toast-icon"><i class="fa-solid fa-circle-check"></i></div>
+        <div class="toast-content">
+            <strong class="toast-title">성공</strong>
+            <p class="toast-message">작업이 처리되었습니다.</p>
+        </div>
+    </div>
+
+    <!-- Main Logic -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <script src="app.js?v=3"></script>
+</body>
+</html>
