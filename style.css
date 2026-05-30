@@ -1826,3 +1826,55 @@ body.theme-cyberpunk {
     background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
     box-shadow: 0 4px 10px rgba(0,0,0,0.15);
 }
+
+/* Drawer font legibility overrides */
+.drawer-card {
+    font-family: var(--font-body) !important;
+    color: #ffffff !important;
+}
+.drawer-title {
+    font-family: var(--font-heading) !important;
+    font-size: 19px !important;
+    font-weight: 800 !important;
+    color: #ffffff !important;
+    letter-spacing: 0.5px;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+}
+.drawer-current-price {
+    font-family: var(--font-heading) !important;
+    font-size: 32px !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.5px;
+    color: #34c759 !important; /* Premium Emerald Growth */
+    text-shadow: 0 0 10px rgba(52,199,89,0.3);
+}
+.drawer-price-block .price-change-badge {
+    font-size: 11px !important;
+    font-weight: 800 !important;
+}
+.drawer-profit-amount {
+    font-family: var(--font-heading) !important;
+    font-size: 22px !important;
+    font-weight: 800 !important;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+.drawer-stat-label {
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    color: var(--text-dim) !important;
+}
+.drawer-stat-value {
+    font-family: var(--font-heading) !important;
+    font-size: 16px !important;
+    font-weight: 800 !important;
+    color: #ffffff !important;
+}
+.drawer-stat-card {
+    background: rgba(255, 255, 255, 0.04) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    box-shadow: inset 0 1px 1px rgba(255,255,255,0.05);
+}
+#btn-drawer-delete-stock {
+    font-weight: 700 !important;
+    letter-spacing: 0.5px;
+}
