@@ -15,7 +15,7 @@
     <!-- FontAwesome for Premium Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- CSS stylesheet -->
-    <link rel="stylesheet" href="style.css?v=34">
+    <link rel="stylesheet" href="style.css?v=35">
     <!-- PWA Manifest -->
     <link rel="manifest" href="manifest.json">
 </head>
@@ -98,7 +98,7 @@
                     </div>
                 </div>
                 <div style="text-align: center; margin-top: 30px; margin-bottom: 10px; font-size: 11px; color: var(--text-dim); font-weight: 500; letter-spacing: 0.5px;">
-                    <i class="fa-solid fa-code-branch"></i> Antigravity Finance v34
+                    <i class="fa-solid fa-code-branch"></i> Antigravity Finance v35
                 </div>
             </section>
 
@@ -308,7 +308,8 @@
                     </div>
                     <div class="form-group col-6">
                         <label class="form-label" id="label-tx-asset-name">자산 / 주식명</label>
-                        <input type="text" class="form-input" id="input-tx-asset-name" placeholder="예: 삼성전자">
+                        <input type="text" class="form-input" id="input-tx-asset-name" placeholder="예: 삼성전자" list="owned-stocks-datalist" autocomplete="off">
+                        <datalist id="owned-stocks-datalist"></datalist>
                     </div>
                 </div>
 
@@ -573,6 +574,6 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <script src="app.js?v=34"></script>
+    <script src="app.js?v=35"></script>
 </body>
 </html>
