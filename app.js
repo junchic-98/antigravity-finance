@@ -831,7 +831,8 @@ function parseTableOCR(text) {
     const items = [];
     
     let tableStarted = false;
-    const headerKeywords = ["종목명", "평가손익", "잔고수량", "매입가", "국가", "구분", "수익률", "평가금액", "현재가"];
+    // Strict headers that ONLY exist on the table column header row to avoid matching the CMA summary area
+    const headerKeywords = ["종목명", "잔고수량", "매입가"];
     const footerKeywords = [
         "원화로 표기", "외화로 표기", "표기 중", "표기중", 
         "이체", "환경설정", "주식현재가", "주식주문", "국내주식", "해외주식", "뱅킹", "계좌개설", "메뉴", "비용포함"
@@ -843,7 +844,7 @@ function parseTableOCR(text) {
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         
-        // 1. Detect table start
+        // 1. Detect table start strictly
         if (!tableStarted) {
             for (let hk of headerKeywords) {
                 if (line.includes(hk)) {
@@ -879,17 +880,23 @@ function parseTableOCR(text) {
             }
         }
         
-        // 4. Strip numbers and symbols to check if it's a stock name candidate
+        // 4. Clean name candidate
         let nameCandidate = line.replace(/\b\d+(?:\.\d+)?\b/g, '').replace(/,/g, '').replace(/[\(\)\-\.\,\/\s%]+/g, ' ').trim();
-        // Remove known words
-        const wordsToIgnore = ["국내", "미국", "해외", "현금", "평가손익", "수익률", "잔고수량", "평가금액", "매입가", "현재가", "종목명", "구분"];
+        const wordsToIgnore = [
+            "국내", "미국", "해외", "현금", "평가손익", "수익률", "잔고수량", "평가금액", "매입가", "현재가", "종목명", "구분",
+            "순자산", "예수금", "매입금액", "매매손익", "전체잔고"
+        ];
         for (let w of wordsToIgnore) {
             nameCandidate = nameCandidate.replace(new RegExp('\\b' + w + '\\b', 'gi'), '');
         }
         nameCandidate = nameCandidate.trim();
         
-        // If it's a valid name candidate (at least 2 Korean or English characters)
-        const isValidName = nameCandidate.length >= 2 && !/^[0-9\s]+$/.test(nameCandidate) && !nameCandidate.includes('EE'); // ignore "EE" artifacts
+        // Ignore single letter misreads (like "E", "EE") or lines containing purely non-alphanumeric noise
+        const isValidName = nameCandidate.length >= 2 && 
+                            /[가-힣a-zA-Z]/.test(nameCandidate) && 
+                            !/^[0-9\s]+$/.test(nameCandidate) && 
+                            nameCandidate.toUpperCase() !== "EE" && 
+                            nameCandidate.toUpperCase() !== "E";
         
         if (isValidName) {
             let ticker = "";
@@ -906,6 +913,12 @@ function parseTableOCR(text) {
             stockBlocks.push(currentBlock);
         }
         
+        // Capture ticker printed on adjacent lines (like cash or country metadata rows)
+        const adjTickerMatch = line.match(/\(([A-Z0-9\.]+)\)/i);
+        if (adjTickerMatch && currentBlock && !currentBlock.ticker) {
+            currentBlock.ticker = adjTickerMatch[1].toUpperCase();
+        }
+        
         // Add numbers found in this line to the current active stock block
         if (currentBlock && lineNumbers.length > 0) {
             currentBlock.numbers.push(...lineNumbers);
@@ -920,7 +933,6 @@ function parseTableOCR(text) {
         let quantity = 1;
         let price = 1000;
         
-        // Using our discovered index-based formula
         if (N >= 5) {
             quantity = block.numbers[1];
             price = block.numbers[3];
@@ -935,7 +947,7 @@ function parseTableOCR(text) {
             price = 1000;
         }
         
-        // Self-correction check: Quantity is usually smaller than Purchase Price.
+        // Self-correction check: Quantity is always the smaller integer/decimal compared to purchase price
         if (quantity > price && price > 0) {
             const temp = quantity;
             quantity = price;
@@ -1353,12 +1365,12 @@ function registerServiceWorkerLocal() {
     // Generate minimal Service Worker inline for seamless PWA execution!
     if ('serviceWorker' in navigator) {
         const swBlob = new Blob([`
-            const CACHE_NAME = 'antigravity-finance-v30';
+            const CACHE_NAME = 'antigravity-finance-v31';
             const ASSETS = [
                 './',
                 './index.html',
                 './style.css',
-                './app.js?v=30'
+                './app.js?v=31'
             ];
             self.addEventListener('install', e => {
                 self.skipWaiting();
