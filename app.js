@@ -92,45 +92,42 @@ function loadLocalStorageData() {
 }
 
 
-// Mathematically synchronize all stock holdings with their transaction history
+// Safely recalculate stock holdings from transaction history
+// ONLY updates existing stock quantities/prices - never creates new stock rows
+// This prevents any accumulation bugs caused by duplicate stock creation
 function syncHoldingsWithTransactions() {
     if (!assetsData.transactions || assetsData.transactions.length === 0) return;
-    
-    // 1. Group transactions by (asset_name, brokerage_or_bank)
+
+    // Group transactions by asset_name (case-insensitive) 
     const txGroups = {};
     assetsData.transactions.forEach(tx => {
         if (tx.category !== "stock") return;
-        const key = `${tx.asset_name.trim().toLowerCase()}|||${tx.brokerage_or_bank.trim()}`;
-        if (!txGroups[key]) {
-            txGroups[key] = [];
-        }
+        const key = tx.asset_name.trim().toLowerCase();
+        if (!txGroups[key]) txGroups[key] = [];
         txGroups[key].push(tx);
     });
 
-    // 2. For each group, calculate total quantity and weighted average price chronologically
-    const computedStocks = {};
-    Object.entries(txGroups).forEach(([key, txs]) => {
+    // For each stock in assetsData.stocks, recalculate qty+price from matching transactions
+    assetsData.stocks.forEach(stock => {
+        const key = stock.name.trim().toLowerCase();
+        const txs = txGroups[key];
+        if (!txs || txs.length === 0) return; // No transaction history for this stock, keep as-is
+
+        // Sort transactions chronologically
         const sortedTxs = [...txs].sort((a, b) => new Date(a.date) - new Date(b.date));
-        
+
         let qty = 0;
         let totalCost = 0;
-        let currency = "KRW";
-        let ticker = "KR_STK";
-        
+
         sortedTxs.forEach(tx => {
-            currency = tx.currency || "KRW";
-            if (tx.ticker && tx.ticker !== "KR_STK") {
-                ticker = tx.ticker;
-            } else if (tx.asset_name.match(/[a-zA-Z]/)) {
-                ticker = tx.asset_name.toUpperCase();
-            }
-            
             if (tx.type === "buy") {
                 const txQty = parseFloat(tx.quantity) || 0;
                 const txPrice = parseFloat(tx.price) || 0;
-                
                 if (txQty > 0) {
-                    totalCost = ((qty * totalCost) + (txQty * txPrice)) / (qty + txQty || 1);
+                    // Weighted average price calculation
+                    totalCost = (qty + txQty) > 0 
+                        ? ((qty * totalCost) + (txQty * txPrice)) / (qty + txQty)
+                        : txPrice;
                     qty += txQty;
                 }
             } else if (tx.type === "sell") {
@@ -138,57 +135,18 @@ function syncHoldingsWithTransactions() {
                 qty = Math.max(0, qty - txQty);
             }
         });
-        
-        computedStocks[key] = {
-            name: txs[0].asset_name,
-            brokerage: txs[0].brokerage_or_bank,
-            quantity: qty,
-            avg_purchase_price: totalCost,
-            currency: currency,
-            ticker: ticker
-        };
-    });
 
-    // 3. Update assetsData.stocks
-    Object.entries(computedStocks).forEach(([key, comp]) => {
-        const [name, brokerage] = key.split("|||");
-        const existingIdx = assetsData.stocks.findIndex(s => 
-            s.name.trim().toLowerCase() === name && 
-            s.brokerage.trim().toLowerCase() === brokerage.toLowerCase()
-        );
-        
-        if (existingIdx !== -1) {
-            const existing = assetsData.stocks[existingIdx];
-            if (comp.quantity > 0) {
-                existing.quantity = comp.quantity;
-                existing.avg_purchase_price = comp.avg_purchase_price;
-                existing.currency = comp.currency;
-                if (comp.ticker && comp.ticker !== "KR_STK") {
-                    existing.ticker = comp.ticker;
-                }
-            } else {
-                // Remove stock if quantity is 0
-                assetsData.stocks.splice(existingIdx, 1);
-            }
-        } else if (comp.quantity > 0) {
-            // Add new stock row
-            assetsData.stocks.push({
-                id: `stock_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-                brokerage: comp.brokerage,
-                name: comp.name,
-                ticker: comp.ticker,
-                quantity: comp.quantity,
-                avg_purchase_price: comp.avg_purchase_price,
-                current_price: comp.avg_purchase_price, 
-                currency: comp.currency
-            });
+        if (qty > 0) {
+            stock.quantity = qty;
+            stock.avg_purchase_price = totalCost;
         }
+        // Note: if qty === 0, we leave the stock as-is and let user delete it manually
+        // to avoid accidental data loss
     });
 }
 
 // 2. Data save to phone LocalStorage
 function saveLocalStorageData() {
-    syncHoldingsWithTransactions();
     localStorage.setItem("antigravity_assets_data", JSON.stringify(assetsData));
     updateUI();
 }
@@ -611,6 +569,7 @@ function renderTransactions() {
             e.stopPropagation();
             if (confirm("이 거래 내역을 삭제하시겠습니까? (보유량 계산에는 반영되지 않으며 이 로그만 제거됩니다)")) {
                 assetsData.transactions = assetsData.transactions.filter(t => t.id !== tx.id);
+                syncHoldingsWithTransactions();
                 saveLocalStorageData();
                 showToast("삭제 완료", "거래 내역이 삭제되었습니다.");
             }
@@ -886,6 +845,8 @@ async function submitAddTx() {
     }
 
     closeModal("modal-add-tx");
+    // Sync holdings with updated transaction history
+    syncHoldingsWithTransactions();
     saveLocalStorageData();
     showToast("내역 등록 성공", "거래 로그 기록 및 포트폴리오를 갱신했습니다.");
 }
@@ -1114,12 +1075,12 @@ function registerServiceWorkerLocal() {
     // Generate minimal Service Worker inline for seamless PWA execution!
     if ('serviceWorker' in navigator) {
         const swBlob = new Blob([`
-            const CACHE_NAME = 'antigravity-finance-v38';
+            const CACHE_NAME = 'antigravity-finance-v39';
             const ASSETS = [
                 './',
                 './index.html',
                 './style.css',
-                './app.js?v=38'
+                './app.js?v=39'
             ];
             self.addEventListener('install', e => {
                 self.skipWaiting();
@@ -1333,6 +1294,8 @@ async function updateStockPrices() {
 window.addEventListener("DOMContentLoaded", () => {
     // 1. Initial Local Data Fetch
     loadLocalStorageData();
+    // One-time sync on startup to correct stock quantities from transaction history
+    syncHoldingsWithTransactions();
 
     // 1.1 Initialize App Theme Engine
     const savedTheme = assetsData.summary.app_theme || "light";
@@ -1887,7 +1850,8 @@ function renderAnalysisViews() {
         accountContainer.innerHTML = "";
         
         const accountSums = {};
-        assetsData.stocks.forEach(item => {
+        const mergedStocks = mergeDuplicateStocks(assetsData.stocks);
+        mergedStocks.forEach(item => {
             const val = item.quantity * item.current_price * (item.currency === "USD" ? rate : 1);
             const acc = item.brokerage || "기본계좌";
             accountSums[acc] = (accountSums[acc] || 0) + val;
