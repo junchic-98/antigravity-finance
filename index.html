@@ -15,7 +15,7 @@
     <!-- FontAwesome for Premium Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- CSS stylesheet -->
-    <link rel="stylesheet" href="style.css?v=22">
+    <link rel="stylesheet" href="style.css?v=23">
     <!-- PWA Manifest -->
     <link rel="manifest" href="manifest.json">
 </head>
@@ -268,6 +268,10 @@
                     <label class="form-label" id="label-institution">금융사명</label>
                     <input type="text" class="form-input" id="input-institution" placeholder="예: 신한은행, 토스증권">
                 </div>
+                <div class="form-group" id="group-account-number">
+                    <label class="form-label">계좌번호 (선택)</label>
+                    <input type="text" class="form-input" id="input-account-number" placeholder="예: 203-01-265287">
+                </div>
 
 
                 <!-- Stock fields -->
@@ -396,6 +400,10 @@
                 <div class="form-group">
                     <label class="form-label">분석된 기관</label>
                     <input type="text" class="form-input" id="scan-confirm-institution">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">계좌번호</label>
+                    <input type="text" class="form-input" id="scan-confirm-account-number" placeholder="예: 203-01-265287 (공백 시 개별 합산)">
                 </div>
 
                 <div class="scan-items-container" id="scan-confirm-items">
@@ -633,6 +641,6 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <script src="app.js?v=22"></script>
+    <script src="app.js?v=23"></script>
 </body>
 </html>
