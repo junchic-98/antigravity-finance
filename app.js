@@ -19,6 +19,39 @@ const defaultMockData = {
     "transactions": []
 };
 
+// Helper to merge duplicate stocks by summing quantities and calculating weighted average purchase price
+function mergeDuplicateStocks(stocks) {
+    const merged = [];
+    stocks.forEach(newStock => {
+        const matched = merged.find(s => 
+            (s.ticker && newStock.ticker && s.ticker.trim().toLowerCase() === newStock.ticker.trim().toLowerCase()) || 
+            (s.name.trim().toLowerCase() === newStock.name.trim().toLowerCase())
+        );
+        if (matched) {
+            const totalQty = matched.quantity + newStock.quantity;
+            if (totalQty > 0) {
+                matched.avg_purchase_price = 
+                    ((matched.quantity * matched.avg_purchase_price) + 
+                     (newStock.quantity * newStock.avg_purchase_price)) / totalQty;
+            }
+            matched.quantity = totalQty;
+            matched.current_price = Math.max(matched.current_price, newStock.current_price);
+            if (newStock.previous_close) matched.previous_close = newStock.previous_close;
+            
+            if (matched.brokerage !== newStock.brokerage && newStock.brokerage) {
+                if (matched.brokerage === "주식계좌" || matched.brokerage === "종합계좌") {
+                    matched.brokerage = newStock.brokerage;
+                } else if (!matched.brokerage.includes(newStock.brokerage)) {
+                    matched.brokerage = `${matched.brokerage}/${newStock.brokerage}`;
+                }
+            }
+        } else {
+            merged.push(newStock);
+        }
+    });
+    return merged;
+}
+
 // 1. Data load from phone LocalStorage
 function loadLocalStorageData() {
     const data = localStorage.getItem("antigravity_assets_data");
@@ -46,6 +79,8 @@ function loadLocalStorageData() {
             } else {
                 // Wipe corrupted stocks (quantity 0 or NaN)
                 assetsData.stocks = assetsData.stocks.filter(s => s.quantity > 0 && !isNaN(s.current_price));
+                // Auto-merge duplicate stocks across different brokerages!
+                assetsData.stocks = mergeDuplicateStocks(assetsData.stocks);
             }
         } catch(e) {
             console.error("Localstorage parse error, loading defaults", e);
@@ -629,6 +664,7 @@ async function submitAddAsset() {
         currency: currency
     };
     assetsData.stocks.push(newStock);
+    assetsData.stocks = mergeDuplicateStocks(assetsData.stocks);
 
     closeModal("modal-add-asset");
     saveLocalStorageData();
@@ -1003,28 +1039,16 @@ async function submitScanConfirm() {
             const price = parseFloat(group.querySelector(".scan-input-price").value) || 0;
             const currency = group.querySelector(".scan-input-currency").value;
 
-            let exists = false;
-            for (let stock of assetsData.stocks) {
-                if (stock.name.toLowerCase() === name.toLowerCase() && stock.brokerage === institution) {
-                    stock.quantity += quantity;
-                    stock.current_price = price;
-                    exists = true;
-                    break;
-                }
-            }
-
-            if (!exists) {
-                assetsData.stocks.push({
-                    id: `stock_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-                    brokerage: institution,
-                    name: name,
-                    ticker: ticker,
-                    quantity: quantity,
-                    avg_purchase_price: price,
-                    current_price: price,
-                    currency: currency
-                });
-            }
+            assetsData.stocks.push({
+                id: `stock_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+                brokerage: institution,
+                name: name,
+                ticker: ticker,
+                quantity: quantity,
+                avg_purchase_price: price,
+                current_price: price,
+                currency: currency
+            });
         } else {
             const accName = group.querySelector(".scan-input-accname").value.trim();
             const accNum = group.querySelector(".scan-input-accnum").value.trim();
@@ -1042,6 +1066,10 @@ async function submitScanConfirm() {
             });
         }
     });
+
+    if (type === "stock") {
+        assetsData.stocks = mergeDuplicateStocks(assetsData.stocks);
+    }
 
     closeModal("modal-scan-confirm");
     saveLocalStorageData();
@@ -1122,12 +1150,12 @@ function registerServiceWorkerLocal() {
     // Generate minimal Service Worker inline for seamless PWA execution!
     if ('serviceWorker' in navigator) {
         const swBlob = new Blob([`
-            const CACHE_NAME = 'antigravity-finance-v20';
+            const CACHE_NAME = 'antigravity-finance-v21';
             const ASSETS = [
                 './',
                 './index.html',
                 './style.css',
-                './app.js?v=20'
+                './app.js?v=21'
             ];
             self.addEventListener('install', e => {
                 e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
