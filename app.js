@@ -821,6 +821,98 @@ function setupUploader() {
     });
 }
 
+// Parse Korean brokerage holdings table screenshots with structured row parsing
+function parseTableOCR(text) {
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    const items = [];
+    
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        
+        // Detect if this line represents country/market or has a ticker pattern in parentheses
+        const isMarketLine = line.includes("국내") || line.includes("미국") || line.includes("해외") || /\([A-Z0-9\.]+\)/i.test(line);
+        
+        if (isMarketLine && i > 0) {
+            let stockName = lines[i - 1];
+            // Skip headers/metadata
+            if (stockName.includes("종목") || stockName.includes("잔고") || stockName.includes("평가") || stockName.includes("계좌") || stockName.includes("예수금") || stockName.includes("수익률")) {
+                continue;
+            }
+            
+            // Clean up stock name (remove random OCR artifacts like checkboxes or dots)
+            stockName = stockName.replace(/^[^a-zA-Z가-힣0-9]+/, '').trim();
+            
+            // Extract ticker inside parentheses
+            let ticker = "";
+            const tickerMatch = line.match(/\(([A-Z0-9\.]+)\)/i);
+            if (tickerMatch) {
+                ticker = tickerMatch[1].toUpperCase();
+            }
+            
+            const numbers = [];
+            let j = i + 1;
+            
+            while (j < lines.length && numbers.length < 5) {
+                const nextLine = lines[j];
+                // Check if we hit the next stock block
+                if (j > i + 2 && !/[0-9]/.test(nextLine) && nextLine.length > 2 && (nextLine.includes("국내") || nextLine.includes("미국") || nextLine.includes("해외"))) {
+                    break;
+                }
+                
+                const numStr = nextLine.replace(/,/g, '').trim();
+                // Match integers and decimals (both positive and negative for profits)
+                if (/^\-?[0-9]+(?:\.[0-9]+)?%?$/.test(numStr)) {
+                    if (!numStr.endsWith('%')) { // Ignore yield percentages
+                        numbers.push(parseFloat(numStr));
+                    }
+                }
+                j++;
+            }
+            
+            if (numbers.length >= 3) {
+                let quantity = 1;
+                let buyPrice = 1000;
+                let currentPrice = 1000;
+                
+                if (numbers.length === 5) {
+                    quantity = numbers[1];
+                    buyPrice = numbers[3];
+                    currentPrice = numbers[4];
+                } else if (numbers.length === 4) {
+                    quantity = numbers[0];
+                    buyPrice = numbers[2];
+                    currentPrice = numbers[3];
+                } else {
+                    quantity = numbers[0];
+                    buyPrice = numbers[1];
+                    currentPrice = numbers[2];
+                }
+                
+                let currency = "KRW";
+                if (line.includes("미국") || line.includes("USD") || ticker || stockName.match(/^[a-zA-Z\s\.\&\-]+$/)) {
+                    currency = "USD";
+                }
+                
+                if (!ticker) {
+                    ticker = currency === "USD" ? "US_STK" : "KR_STK";
+                }
+                
+                items.push({
+                    name: stockName,
+                    ticker: ticker,
+                    quantity: quantity,
+                    price: buyPrice,
+                    current_price: currentPrice,
+                    currency: currency
+                });
+                
+                i = j - 1; // skip parsed lines
+            }
+        }
+    }
+    return items;
+}
+
 // Process OCR loading sequences inside the browser (zero server dependencies!)
 async function handleScreenshotFileLocal(file) {
     const loader = document.getElementById("scan-loading");
@@ -842,7 +934,7 @@ async function handleScreenshotFileLocal(file) {
             'kor+eng',
             { logger: m => {
                 if (m.status === "recognizing text") {
-                    stepText.textContent = `카카오톡 알림 텍스트 판독 중... (${Math.round(m.progress * 100)}%)`;
+                    stepText.textContent = `주식 잔고 텍스트 판독 중... (${Math.round(m.progress * 100)}%)`;
                 }
             }}
         );
@@ -862,14 +954,19 @@ async function handleScreenshotFileLocal(file) {
         if (text.includes("나무증권") || text.includes("나무")) detectedData.institution = "나무증권";
         else if (text.includes("한국투자") || text.includes("한국 투자") || text.includes("한투")) detectedData.institution = "한국투자증권";
         else if (text.includes("토스") || text.includes("toss")) detectedData.institution = "토스증권";
-        else if (text.includes("KB") || text.includes("국민")) detectedData.institution = "KB증권";
+        else if (text.includes("KB") || text.includes("국민") || text.includes("주식 잔고") || text.includes("CMA")) detectedData.institution = "KB증권";
         else if (text.includes("미래에셋")) detectedData.institution = "미래에셋증권";
         else if (text.includes("삼성증권")) detectedData.institution = "삼성증권";
         
-        let remainingText = text;
-        
-        while (remainingText.length > 0) {
-            let stockName = "알 수 없음";
+        // 1. Try Structured holdings table parsing first
+        const tableItems = parseTableOCR(text);
+        if (tableItems && tableItems.length > 0) {
+            detectedData.extracted_items = tableItems;
+        } else {
+            // 2. Fallback to natural text / KakaoTalk notification message matching
+            let remainingText = text;
+            while (remainingText.length > 0) {
+                let stockName = "알 수 없음";
             let quantity = 0;
             let price = 0;
             let foundAny = false;
@@ -934,6 +1031,7 @@ async function handleScreenshotFileLocal(file) {
                 });
             }
         }
+    }
         
         // If the entire text yielded absolutely nothing
         if (detectedData.extracted_items.length === 0) {
@@ -1150,12 +1248,12 @@ function registerServiceWorkerLocal() {
     // Generate minimal Service Worker inline for seamless PWA execution!
     if ('serviceWorker' in navigator) {
         const swBlob = new Blob([`
-            const CACHE_NAME = 'antigravity-finance-v21';
+            const CACHE_NAME = 'antigravity-finance-v22';
             const ASSETS = [
                 './',
                 './index.html',
                 './style.css',
-                './app.js?v=21'
+                './app.js?v=22'
             ];
             self.addEventListener('install', e => {
                 e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
