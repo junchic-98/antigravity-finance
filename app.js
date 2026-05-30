@@ -1122,12 +1122,12 @@ function registerServiceWorkerLocal() {
     // Generate minimal Service Worker inline for seamless PWA execution!
     if ('serviceWorker' in navigator) {
         const swBlob = new Blob([`
-            const CACHE_NAME = 'antigravity-finance-v16';
+            const CACHE_NAME = 'antigravity-finance-v20';
             const ASSETS = [
                 './',
                 './index.html',
                 './style.css',
-                './app.js?v=16'
+                './app.js?v=20'
             ];
             self.addEventListener('install', e => {
                 e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
@@ -1143,16 +1143,6 @@ function registerServiceWorkerLocal() {
             .catch(err => console.log("Service worker registration skipped: ", err));
     }
 }
-
-
-            
-            if (importedCount === 0) {
-                firstImportedName = parsed.asset_name;
-                firstImportedBrokerage = parsed.brokerage_or_bank;
-                firstImportedType = parsed.type === 'buy' ? '매수' : '매도';
-            }
-            importedCount++;
-
 // Helper to check if both yesterday and today are weekends or holidays in the market's timezone.
 // Returns true when markets are closed both yesterday AND today — meaning previous_close should equal current_price.
 function checkIfBothDaysAreHolidaysOrWeekends(currency, ticker) {
