@@ -863,12 +863,20 @@ function parseTableOCR(text) {
                     break;
                 }
                 
-                const numStr = nextLine.replace(/,/g, '').trim();
-                // Match integers and decimals (both positive and negative for profits)
-                if (/^\-?[0-9]+(?:\.[0-9]+)?%?$/.test(numStr)) {
-                    if (!numStr.endsWith('%')) { // Ignore yield percentages
-                        numbers.push(parseFloat(numStr));
-                    }
+                if (nextLine.includes('%')) {
+                    j++;
+                    continue;
+                }
+                
+                const cleanLine = nextLine.replace(/,/g, '').trim();
+                const lineNumbers = cleanLine.match(/\-?[0-9]+(?:\.[0-9]+)?/g);
+                if (lineNumbers) {
+                    lineNumbers.forEach(numStr => {
+                        const val = parseFloat(numStr);
+                        if (!isNaN(val)) {
+                            numbers.push(val);
+                        }
+                    });
                 }
                 j++;
             }
@@ -1281,12 +1289,12 @@ function registerServiceWorkerLocal() {
     // Generate minimal Service Worker inline for seamless PWA execution!
     if ('serviceWorker' in navigator) {
         const swBlob = new Blob([`
-            const CACHE_NAME = 'antigravity-finance-v24';
+            const CACHE_NAME = 'antigravity-finance-v25';
             const ASSETS = [
                 './',
                 './index.html',
                 './style.css',
-                './app.js?v=24'
+                './app.js?v=25'
             ];
             self.addEventListener('install', e => {
                 e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
