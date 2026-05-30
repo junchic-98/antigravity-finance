@@ -909,6 +909,27 @@ function parseTableOCR(text) {
                     ticker = currency === "USD" ? "US_STK" : "KR_STK";
                 }
                 
+                // Smart auto-mapping of common Korean stocks to real 6-digit tickers for live pricing
+                if (currency === "KRW" && (ticker === "KR_STK" || !ticker)) {
+                    const dict = {
+                        "삼성전자": "005930",
+                        "SK하이닉스": "000660",
+                        "현대차": "005380",
+                        "현대자동차": "005380",
+                        "네이버": "035420",
+                        "NAVER": "035420",
+                        "카카오": "035720",
+                        "TIGER 미국나스닥100레버리지": "418660",
+                        "ACE 미국빅테크TOP7 Plus레버리지": "465580"
+                    };
+                    for (let key in dict) {
+                        if (stockName.includes(key)) {
+                            ticker = dict[key];
+                            break;
+                        }
+                    }
+                }
+                
                 items.push({
                     name: stockName,
                     ticker: ticker,
@@ -1197,6 +1218,8 @@ async function submitScanConfirm() {
 
     closeModal("modal-scan-confirm");
     saveLocalStorageData();
+    // Automatically trigger background real-time price synchronization
+    updateStockPrices();
     showToast("자산 정보 반영 완료", "스크린샷으로 추출된 내역이 포트폴리오에 병합되었습니다.");
 }
 
@@ -1289,12 +1312,12 @@ function registerServiceWorkerLocal() {
     // Generate minimal Service Worker inline for seamless PWA execution!
     if ('serviceWorker' in navigator) {
         const swBlob = new Blob([`
-            const CACHE_NAME = 'antigravity-finance-v25';
+            const CACHE_NAME = 'antigravity-finance-v26';
             const ASSETS = [
                 './',
                 './index.html',
                 './style.css',
-                './app.js?v=25'
+                './app.js?v=26'
             ];
             self.addEventListener('install', e => {
                 e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
