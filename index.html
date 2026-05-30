@@ -15,7 +15,7 @@
     <!-- FontAwesome for Premium Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- CSS stylesheet -->
-    <link rel="stylesheet" href="style.css?v=31">
+    <link rel="stylesheet" href="style.css?v=32">
     <!-- PWA Manifest -->
     <link rel="manifest" href="manifest.json">
 </head>
@@ -98,7 +98,7 @@
                     </div>
                 </div>
                 <div style="text-align: center; margin-top: 30px; margin-bottom: 10px; font-size: 11px; color: var(--text-dim); font-weight: 500; letter-spacing: 0.5px;">
-                    <i class="fa-solid fa-code-branch"></i> Antigravity Finance v31
+                    <i class="fa-solid fa-code-branch"></i> Antigravity Finance v32
                 </div>
             </section>
 
@@ -194,43 +194,7 @@
                 </div>
             </section>
 
-            <!-- TAB 3: SCREENSHOT IMPORT -->
-            <section id="tab-uploader" class="tab-pane">
-                <div class="section-header">
-                    <h2 class="page-title"><i class="fa-solid fa-camera text-accent"></i> 스크린샷 자산 등록</h2>
-                </div>
-                
-                <p class="section-desc">주식 잔고 캡쳐를 업로드하여 자산을 분석하고 등록합니다.</p>
-
-                <!-- Drag & Drop Area -->
-                <div class="upload-dropzone" id="upload-zone">
-                    <div class="upload-icon-pulse">
-                        <i class="fa-solid fa-cloud-arrow-up"></i>
-                    </div>
-                    <h3>금융사 스크린샷 선택</h3>
-                    <p>또는 화면을 드래그하여 여기에 놓으세요</p>
-                    <input type="file" id="screenshot-input" accept="image/*" style="display: none;">
-                    <button class="btn-primary" onclick="document.getElementById('screenshot-input').click()"><i class="fa-solid fa-image"></i> 사진 불러오기</button>
-                </div>
-
-                <!-- Simulation Info Cards -->
-                <div class="glass-panel" style="margin-top: 20px;">
-                    <h4 class="panel-subtitle" style="margin-bottom: 10px;"><i class="fa-solid fa-circle-info"></i> 분석 가능한 예시 캡쳐</h4>
-                    <ul class="example-list">
-                        <li><i class="fa-solid fa-check text-success"></i> 주식: 토스증권, 한국투자증권 보유 주식 잔고 화면</li>
-                    </ul>
-                </div>
-
-                <!-- Scan Loading Overlay -->
-                <div class="scan-overlay" id="scan-loading" style="display: none;">
-                    <div class="scan-scanner"></div>
-                    <div class="scan-spinner">
-                        <div class="spinner-core"></div>
-                    </div>
-                    <h3 class="scan-title">AI 이미지 분석 중...</h3>
-                    <p class="scan-step" id="scan-step-text">계좌 및 주식 텍스트 영역 검출 중...</p>
-                </div>
-            </section>
+            
 
 
         </main>
@@ -249,10 +213,7 @@
                 <i class="fa-solid fa-receipt"></i>
                 <span>거래 내역</span>
             </button>
-            <button class="nav-item" data-tab="tab-uploader">
-                <i class="fa-solid fa-camera"></i>
-                <span>캡쳐 등록</span>
-            </button>
+
         </nav>
     </div>
 
@@ -390,35 +351,7 @@
         </div>
     </div>
 
-    <!-- MODAL 3: SCREENSHOT RESULT VERIFICATION -->
-    <div class="modal-overlay" id="modal-scan-confirm" style="display: none;">
-        <div class="modal-card">
-            <div class="modal-header">
-                <h3 class="modal-title"><i class="fa-solid fa-magnifying-glass-chart text-success"></i> 캡쳐 분석 결과 확인</h3>
-                <button class="modal-close" onclick="closeModal('modal-scan-confirm')"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-            <div class="modal-body">
-                <p class="modal-subtitle">이미지에서 추출된 아래의 내역을 확인해 주세요. 오차가 있을 경우 수정한 후 승인하십시오.</p>
-                
-                <div class="form-group">
-                    <label class="form-label">분석된 기관</label>
-                    <input type="text" class="form-input" id="scan-confirm-institution">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">계좌번호</label>
-                    <input type="text" class="form-input" id="scan-confirm-account-number" placeholder="예: 203-01-265287 (공백 시 개별 합산)">
-                </div>
-
-                <div class="scan-items-container" id="scan-confirm-items">
-                    <!-- JS generated fields based on scanned items -->
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn-secondary" onclick="closeModal('modal-scan-confirm')">재업로드</button>
-                <button class="btn-primary" onclick="submitScanConfirm()"><i class="fa-solid fa-check"></i> 자산 포트폴리오 반영</button>
-            </div>
-        </div>
-    </div>
+    
 
     <!-- MODAL 4: EXCHANGE RATE EDIT -->
     <div class="modal-overlay" id="modal-edit-rates" style="display: none;">
@@ -638,12 +571,12 @@
     </div>
 
     <!-- OCR Engine (Tesseract.js) -->
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    
     
     <!-- Main Logic -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <script src="app.js?v=31"></script>
+    <script src="app.js?v=32"></script>
 </body>
 </html>
