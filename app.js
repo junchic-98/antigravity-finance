@@ -831,28 +831,19 @@ function parseTableOCR(text) {
     const items = [];
     
     let tableStarted = false;
-    const stockNames = [];
-    const tickers = [];
-    const rawNumbers = [];
-    
-    const ignoreKeywords = [
-        "종목명", "잔고", "평가", "수익률", "계좌", "예수금", "수량", "단가", "금액", "가격", "체결",
-        "나무증권", "한국투자", "토스", "KB증권", "미래에셋", "삼성증권", "금융사", "기관",
-        "보유", "총자산", "자산", "합계", "소계", "누적", "보유주식", "안내", "상세", "조회", "가능"
-    ];
-    
     const headerKeywords = ["종목명", "평가손익", "잔고수량", "매입가", "국가", "구분", "수익률", "평가금액", "현재가"];
-    
     const footerKeywords = [
         "원화로 표기", "외화로 표기", "표기 중", "표기중", 
         "이체", "환경설정", "주식현재가", "주식주문", "국내주식", "해외주식", "뱅킹", "계좌개설", "메뉴", "비용포함"
     ];
     
-    // 1. Parse Stock Names
+    const stockBlocks = [];
+    let currentBlock = null;
+    
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         
-        // Detect table start
+        // 1. Detect table start
         if (!tableStarted) {
             for (let hk of headerKeywords) {
                 if (line.includes(hk)) {
@@ -860,65 +851,10 @@ function parseTableOCR(text) {
                     break;
                 }
             }
-            continue; // Skip lines before table headers
-        }
-        
-        // Detect table end (Footer)
-        let isFooter = false;
-        for (let fk of footerKeywords) {
-            if (line.toLowerCase().includes(fk.toLowerCase())) {
-                isFooter = true;
-                break;
-            }
-        }
-        if (isFooter) {
-            break; // Stop parsing names immediately!
-        }
-        
-        // Skip purely numeric lines, percentages, dates, account numbers
-        if (/^[0-9\-\.,\/\s%]+$/.test(line)) continue;
-        if (line.includes('%')) continue;
-        
-        // Skip known keywords
-        let shouldIgnore = false;
-        for (let kw of ignoreKeywords) {
-            if (line.toLowerCase().includes(kw.toLowerCase())) {
-                shouldIgnore = true;
-                break;
-            }
-        }
-        if (shouldIgnore) continue;
-        
-        // Check if there is a ticker pattern in parentheses like (BRK.B) or (005930)
-        let ticker = "";
-        const tickerMatch = line.match(/\(([A-Z0-9\.]+)\)/i);
-        if (tickerMatch) {
-            ticker = tickerMatch[1].toUpperCase();
-        }
-        
-        // Clean up stock name (remove random OCR symbols)
-        let cleanName = line.replace(/\(([A-Z0-9\.]+)\)/i, '').replace(/^[^a-zA-Z가-힣0-9\s]+/, '').replace(/[^a-zA-Z가-힣0-9\s]+$/, '').trim();
-        if (cleanName.length < 2) continue;
-        if (cleanName === "국내" || cleanName === "미국" || cleanName === "해외" || cleanName === "현금") continue;
-        
-        stockNames.push(cleanName);
-        tickers.push(ticker);
-    }
-    
-    // 2. Extract Numbers (Only up to the table end)
-    let tableStartedForNumbers = false;
-    for (let line of lines) {
-        if (!tableStartedForNumbers) {
-            for (let hk of headerKeywords) {
-                if (line.includes(hk)) {
-                    tableStartedForNumbers = true;
-                    break;
-                }
-            }
             continue;
         }
         
-        // Detect table end (Footer) for numbers to prevent mixing in footer numbers
+        // 2. Detect table end
         let isFooter = false;
         for (let fk of footerKeywords) {
             if (line.toLowerCase().includes(fk.toLowerCase())) {
@@ -927,53 +863,76 @@ function parseTableOCR(text) {
             }
         }
         if (isFooter) {
-            break; // Stop extracting numbers immediately!
+            break;
         }
         
-        if (line.includes('%')) continue;
-        if (/\b\d{4}-\d{2}-\d{2}\b/.test(line)) continue;
-        if (/\b\d{3}-\d{2,3}-\d{5,8}\b/.test(line)) continue;
+        // 3. Extract numbers from this line
+        const lineNumbers = [];
+        if (!line.includes('%')) {
+            const cleanLine = line.replace(/,/g, '').trim();
+            const matches = cleanLine.match(/\b\d+(?:\.\d+)?\b/g);
+            if (matches) {
+                matches.forEach(m => {
+                    const val = parseFloat(m);
+                    if (!isNaN(val)) lineNumbers.push(val);
+                });
+            }
+        }
         
-        const cleanLine = line.replace(/,/g, '').trim();
-        const lineNumbers = cleanLine.match(/\b\d+(?:\.\d+)?\b/g);
-        if (lineNumbers) {
-            lineNumbers.forEach(numStr => {
-                const val = parseFloat(numStr);
-                if (!isNaN(val)) {
-                    rawNumbers.push(val);
-                }
-            });
+        // 4. Strip numbers and symbols to check if it's a stock name candidate
+        let nameCandidate = line.replace(/\b\d+(?:\.\d+)?\b/g, '').replace(/,/g, '').replace(/[\(\)\-\.\,\/\s%]+/g, ' ').trim();
+        // Remove known words
+        const wordsToIgnore = ["국내", "미국", "해외", "현금", "평가손익", "수익률", "잔고수량", "평가금액", "매입가", "현재가", "종목명", "구분"];
+        for (let w of wordsToIgnore) {
+            nameCandidate = nameCandidate.replace(new RegExp('\\b' + w + '\\b', 'gi'), '');
+        }
+        nameCandidate = nameCandidate.trim();
+        
+        // If it's a valid name candidate (at least 2 Korean or English characters)
+        const isValidName = nameCandidate.length >= 2 && !/^[0-9\s]+$/.test(nameCandidate) && !nameCandidate.includes('EE'); // ignore "EE" artifacts
+        
+        if (isValidName) {
+            let ticker = "";
+            const tickerMatch = line.match(/\(([A-Z0-9\.]+)\)/i);
+            if (tickerMatch) {
+                ticker = tickerMatch[1].toUpperCase();
+            }
+            
+            currentBlock = {
+                name: nameCandidate,
+                ticker: ticker,
+                numbers: []
+            };
+            stockBlocks.push(currentBlock);
+        }
+        
+        // Add numbers found in this line to the current active stock block
+        if (currentBlock && lineNumbers.length > 0) {
+            currentBlock.numbers.push(...lineNumbers);
         }
     }
     
-    const N = stockNames.length;
-    if (N === 0) return items;
-    
-    console.log("Filtered Stocks Names:", stockNames);
-    console.log("Filtered Raw Numbers:", rawNumbers);
-    
-    // Map names to numbers
-    for (let i = 0; i < N; i++) {
+    // Process each stock block
+    stockBlocks.forEach(block => {
+        const N = block.numbers.length;
+        if (N === 0) return;
+        
         let quantity = 1;
         let price = 1000;
         
-        // Let's locate the values intelligently!
-        if (rawNumbers.length >= 5 * N) {
-            // Extract quantities and purchase prices based on our mathematical formula
-            quantity = rawNumbers[N + 2 * i] || 1;
-            price = rawNumbers[3 * N + 2 * i] || 1000;
-        } else if (rawNumbers.length >= 4 * N) {
-            // If no profits column: total 4N numbers
-            quantity = rawNumbers[2 * i] || 1;
-            price = rawNumbers[2 * N + 2 * i] || 1000;
-        } else if (rawNumbers.length >= 2 * N) {
-            // If only quantities and prices: total 2N numbers
-            quantity = rawNumbers[i] || 1;
-            price = rawNumbers[N + i] || 1000;
+        // Using our discovered index-based formula
+        if (N >= 5) {
+            quantity = block.numbers[1];
+            price = block.numbers[3];
+        } else if (N >= 4) {
+            quantity = block.numbers[1];
+            price = block.numbers[2];
+        } else if (N >= 2) {
+            quantity = block.numbers[0];
+            price = block.numbers[1];
         } else {
-            // Fallback
-            quantity = rawNumbers[2 * i] || 1;
-            price = rawNumbers[2 * i + 1] || 1000;
+            quantity = block.numbers[0] || 1;
+            price = 1000;
         }
         
         // Self-correction check: Quantity is usually smaller than Purchase Price.
@@ -983,8 +942,8 @@ function parseTableOCR(text) {
             price = temp;
         }
         
-        let name = stockNames[i];
-        let ticker = tickers[i];
+        let name = block.name;
+        let ticker = block.ticker;
         let currency = "KRW";
         
         if (name.match(/[a-zA-Z]/) || ticker || name.includes("미국") || name.includes("해외")) {
@@ -994,7 +953,7 @@ function parseTableOCR(text) {
             ticker = currency === "USD" ? "US_STK" : "KR_STK";
         }
         
-        // Smart auto-mapping of common Korean stocks to real 6-digit tickers for live pricing
+        // Smart auto-mapping of common Korean stocks
         if (currency === "KRW" && (ticker === "KR_STK" || !ticker)) {
             const dict = {
                 "삼성전자": "005930",
@@ -1023,7 +982,7 @@ function parseTableOCR(text) {
             current_price: price,
             currency: currency
         });
-    }
+    });
     
     return items;
 }
@@ -1394,12 +1353,12 @@ function registerServiceWorkerLocal() {
     // Generate minimal Service Worker inline for seamless PWA execution!
     if ('serviceWorker' in navigator) {
         const swBlob = new Blob([`
-            const CACHE_NAME = 'antigravity-finance-v29';
+            const CACHE_NAME = 'antigravity-finance-v30';
             const ASSETS = [
                 './',
                 './index.html',
                 './style.css',
-                './app.js?v=29'
+                './app.js?v=30'
             ];
             self.addEventListener('install', e => {
                 self.skipWaiting();
