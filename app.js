@@ -1394,20 +1394,38 @@ function registerServiceWorkerLocal() {
     // Generate minimal Service Worker inline for seamless PWA execution!
     if ('serviceWorker' in navigator) {
         const swBlob = new Blob([`
-            const CACHE_NAME = 'antigravity-finance-v28';
+            const CACHE_NAME = 'antigravity-finance-v29';
             const ASSETS = [
                 './',
                 './index.html',
                 './style.css',
-                './app.js?v=28'
+                './app.js?v=29'
             ];
             self.addEventListener('install', e => {
+                self.skipWaiting();
                 e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
             });
-            self.addEventListener('fetch', e => {
-                e.respondWith(caches.match(e.request).then(res => res || fetch(e.request)));
+            self.addEventListener('activate', e => {
+                e.waitUntil(
+                    caches.keys().then(keys => Promise.all(
+                        keys.map(key => {
+                            if (key !== CACHE_NAME) {
+                                return caches.delete(key);
+                            }
+                        })
+                    )).then(() => self.clients.claim())
+                );
             });
-        `], {type: 'application/javascript'});
+            self.addEventListener('fetch', e => {
+                e.respondWith(
+                    caches.match(e.request).then(res => {
+                        return res || fetch(e.request).then(response => {
+                            return response;
+                        });
+                    })
+                );
+            });
+`], {type: 'application/javascript'});
         
         const swUrl = URL.createObjectURL(swBlob);
         navigator.serviceWorker.register(swUrl)
