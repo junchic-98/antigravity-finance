@@ -977,6 +977,7 @@ function setupBackupAndRestore() {
     });
 
     // Bind file input change
+    fileInput.addEventListener("change", (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
@@ -1006,12 +1007,12 @@ function registerServiceWorkerLocal() {
     // Generate minimal Service Worker inline for seamless PWA execution!
     if ('serviceWorker' in navigator) {
         const swBlob = new Blob([`
-            const CACHE_NAME = 'antigravity-finance-v35';
+            const CACHE_NAME = 'antigravity-finance-v36';
             const ASSETS = [
                 './',
                 './index.html',
                 './style.css',
-                './app.js?v=35'
+                './app.js?v=36'
             ];
             self.addEventListener('install', e => {
                 self.skipWaiting();
