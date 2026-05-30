@@ -902,12 +902,12 @@ function registerServiceWorkerLocal() {
     // Generate minimal Service Worker inline for seamless PWA execution!
     if ('serviceWorker' in navigator) {
         const swBlob = new Blob([`
-            const CACHE_NAME = 'antigravity-finance-v33';
+            const CACHE_NAME = 'antigravity-finance-v34';
             const ASSETS = [
                 './',
                 './index.html',
                 './style.css',
-                './app.js?v=33'
+                './app.js?v=34'
             ];
             self.addEventListener('install', e => {
                 self.skipWaiting();
@@ -1156,7 +1156,22 @@ window.addEventListener("DOMContentLoaded", () => {
     // 7. Register Service Worker for offline PWA installation
     registerServiceWorkerLocal();
 
-    // 7.1 Bind Stock Price Sync Button
+    // 7.1 Auto calculation for manual transaction amount
+    const txQtyInput = document.getElementById("input-tx-qty");
+    const txPriceInput = document.getElementById("input-tx-price");
+    const txAmountInput = document.getElementById("input-tx-amount");
+    
+    function updateAutoTxAmount() {
+        const qty = parseFloat(txQtyInput.value) || 0;
+        const price = parseFloat(txPriceInput.value) || 0;
+        txAmountInput.value = Math.round(qty * price);
+    }
+    if (txQtyInput && txPriceInput) {
+        txQtyInput.addEventListener("input", updateAutoTxAmount);
+        txPriceInput.addEventListener("input", updateAutoTxAmount);
+    }
+
+    // 7.2 Bind Stock Price Sync Button
     const syncBtn = document.getElementById("btn-sync-prices");
     if (syncBtn) {
         syncBtn.addEventListener("click", updateStockPrices);
