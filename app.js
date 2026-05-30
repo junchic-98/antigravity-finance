@@ -830,119 +830,168 @@ function parseTableOCR(text) {
     const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
     const items = [];
     
+    // 1. Identify Stock Names
+    const stockNames = [];
+    const tickers = [];
+    const ignoreKeywords = [
+        "외화로 표기 중", "외화로 표기중", "외화로", "표기 중", "표기중",
+        "종목명", "잔고", "평가", "수익률", "계좌", "예수금", "수량", "단가", "금액", "가격", "체결",
+        "나무증권", "한국투자", "토스", "KB증권", "미래에셋", "삼성증권", "금융사", "기관",
+        "보유", "총자산", "자산", "합계", "소계", "누적", "보유주식", "안내", "상세", "조회", "가능"
+    ];
+    
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         
-        // Detect if this line represents country/market or has a ticker pattern in parentheses
-        const isMarketLine = line.includes("국내") || line.includes("미국") || line.includes("해외") || /\([A-Z0-9\.]+\)/i.test(line);
+        // Skip purely numeric lines, percentages, dates, account numbers
+        if (/^[0-9\-\.,\/\s%]+$/.test(line)) continue;
+        if (line.includes('%')) continue;
         
-        if (isMarketLine && i > 0) {
-            let stockName = lines[i - 1];
-            // Skip headers/metadata
-            if (stockName.includes("종목") || stockName.includes("잔고") || stockName.includes("평가") || stockName.includes("계좌") || stockName.includes("예수금") || stockName.includes("수익률")) {
-                continue;
-            }
-            
-            // Clean up stock name (remove random OCR artifacts like checkboxes or dots)
-            stockName = stockName.replace(/^[^a-zA-Z가-힣0-9]+/, '').trim();
-            
-            // Extract ticker inside parentheses
-            let ticker = "";
-            const tickerMatch = line.match(/\(([A-Z0-9\.]+)\)/i);
-            if (tickerMatch) {
-                ticker = tickerMatch[1].toUpperCase();
-            }
-            
-            const numbers = [];
-            let j = i + 1;
-            
-            while (j < lines.length && numbers.length < 5) {
-                const nextLine = lines[j];
-                // Check if we hit the next stock block
-                if (j > i + 2 && !/[0-9]/.test(nextLine) && nextLine.length > 2 && (nextLine.includes("국내") || nextLine.includes("미국") || nextLine.includes("해외"))) {
-                    break;
-                }
-                
-                if (nextLine.includes('%')) {
-                    j++;
-                    continue;
-                }
-                
-                const cleanLine = nextLine.replace(/,/g, '').trim();
-                const lineNumbers = cleanLine.match(/\-?[0-9]+(?:\.[0-9]+)?/g);
-                if (lineNumbers) {
-                    lineNumbers.forEach(numStr => {
-                        const val = parseFloat(numStr);
-                        if (!isNaN(val)) {
-                            numbers.push(val);
-                        }
-                    });
-                }
-                j++;
-            }
-            
-            if (numbers.length >= 3) {
-                let quantity = 1;
-                let buyPrice = 1000;
-                let currentPrice = 1000;
-                
-                if (numbers.length === 5) {
-                    quantity = numbers[1];
-                    buyPrice = numbers[3];
-                    currentPrice = numbers[4];
-                } else if (numbers.length === 4) {
-                    quantity = numbers[0];
-                    buyPrice = numbers[2];
-                    currentPrice = numbers[3];
-                } else {
-                    quantity = numbers[0];
-                    buyPrice = numbers[1];
-                    currentPrice = numbers[2];
-                }
-                
-                let currency = "KRW";
-                if (line.includes("미국") || line.includes("USD") || ticker || stockName.match(/^[a-zA-Z\s\.\&\-]+$/)) {
-                    currency = "USD";
-                }
-                
-                if (!ticker) {
-                    ticker = currency === "USD" ? "US_STK" : "KR_STK";
-                }
-                
-                // Smart auto-mapping of common Korean stocks to real 6-digit tickers for live pricing
-                if (currency === "KRW" && (ticker === "KR_STK" || !ticker)) {
-                    const dict = {
-                        "삼성전자": "005930",
-                        "SK하이닉스": "000660",
-                        "현대차": "005380",
-                        "현대자동차": "005380",
-                        "네이버": "035420",
-                        "NAVER": "035420",
-                        "카카오": "035720",
-                        "TIGER 미국나스닥100레버리지": "418660",
-                        "ACE 미국빅테크TOP7 Plus레버리지": "465580"
-                    };
-                    for (let key in dict) {
-                        if (stockName.includes(key)) {
-                            ticker = dict[key];
-                            break;
-                        }
-                    }
-                }
-                
-                items.push({
-                    name: stockName,
-                    ticker: ticker,
-                    quantity: quantity,
-                    price: buyPrice,
-                    current_price: currentPrice,
-                    currency: currency
-                });
-                
-                i = j - 1; // skip parsed lines
+        // Skip known keywords
+        let shouldIgnore = false;
+        for (let kw of ignoreKeywords) {
+            if (line.toLowerCase().includes(kw.toLowerCase())) {
+                shouldIgnore = true;
+                break;
             }
         }
+        if (shouldIgnore) continue;
+        
+        // Check if there is a ticker pattern in parentheses like (BRK.B) or (005930)
+        let ticker = "";
+        const tickerMatch = line.match(/\(([A-Z0-9\.]+)\)/i);
+        if (tickerMatch) {
+            ticker = tickerMatch[1].toUpperCase();
+        }
+        
+        // If this line is just a market label like "국내", "미국", "해외", skip it
+        if (line === "국내" || line === "미국" || line === "해외") continue;
+        
+        // Clean up stock name (remove random OCR symbols)
+        let cleanName = line.replace(/\(([A-Z0-9\.]+)\)/i, '').replace(/^[^a-zA-Z가-힣0-9]+/, '').replace(/[^a-zA-Z가-힣0-9\s]+$/, '').trim();
+        if (cleanName.length < 2) continue;
+        
+        stockNames.push(cleanName);
+        tickers.push(ticker);
     }
+    
+    // 2. Extract Numbers
+    const numbers = [];
+    for (let line of lines) {
+        // Skip percentages
+        if (line.includes('%')) continue;
+        
+        // Ignore dates like 2026-05-30 or account numbers like 203-01-265287
+        if (/\b\d{4}-\d{2}-\d{2}\b/.test(line)) continue;
+        if (/\b\d{3}-\d{2,3}-\d{5,8}\b/.test(line)) continue;
+        
+        const cleanLine = line.replace(/,/g, '').trim();
+        const lineNumbers = cleanLine.match(/\b\d+(?:\.\d+)?\b/g);
+        if (lineNumbers) {
+            lineNumbers.forEach(numStr => {
+                const val = parseFloat(numStr);
+                if (!isNaN(val)) {
+                    numbers.push(val);
+                }
+            });
+        }
+    }
+    
+    const N = stockNames.length;
+    if (N === 0) return items;
+    
+    // 3. Layout Detection: Column-by-Column vs Row-by-Row
+    // We expect at least 2N numbers to parse quantity and price for each stock
+    if (numbers.length >= 2 * N) {
+        let isColumnLayout = false;
+        
+        // Calculate average of first N numbers vs next N numbers
+        let sum1 = 0, sum2 = 0;
+        for (let i = 0; i < N; i++) {
+            sum1 += numbers[i];
+            sum2 += numbers[N + i];
+        }
+        const avg1 = sum1 / N;
+        const avg2 = sum2 / N;
+        
+        // If the second half has significantly larger numbers, it's a column layout (Quantities then Prices)
+        if (avg2 > avg1 * 5) {
+            isColumnLayout = true;
+        }
+        
+        for (let i = 0; i < N; i++) {
+            let quantity = 1;
+            let price = 1000;
+            
+            if (isColumnLayout) {
+                quantity = numbers[i];
+                price = numbers[N + i];
+            } else {
+                quantity = numbers[2 * i];
+                price = numbers[2 * i + 1];
+            }
+            
+            let name = stockNames[i];
+            let ticker = tickers[i];
+            let currency = "KRW";
+            
+            if (name.match(/[a-zA-Z]/) || ticker || name.includes("미국") || name.includes("해외")) {
+                currency = "USD";
+            }
+            if (!ticker) {
+                ticker = currency === "USD" ? "US_STK" : "KR_STK";
+            }
+            
+            // Smart auto-mapping of common Korean stocks
+            if (currency === "KRW" && (ticker === "KR_STK" || !ticker)) {
+                const dict = {
+                    "삼성전자": "005930",
+                    "SK하이닉스": "000660",
+                    "현대차": "005380",
+                    "현대자동차": "005380",
+                    "네이버": "035420",
+                    "NAVER": "035420",
+                    "카카오": "035720",
+                    "TIGER 미국나스닥100레버리지": "418660",
+                    "ACE 미국빅테크TOP7 Plus레버리지": "465580"
+                };
+                for (let key in dict) {
+                    if (name.includes(key)) {
+                        ticker = dict[key];
+                        break;
+                    }
+                }
+            }
+            
+            items.push({
+                name: name,
+                ticker: ticker,
+                quantity: quantity,
+                price: price,
+                current_price: price,
+                currency: currency
+            });
+        }
+    } else {
+        // Fallback: If not enough numbers, just map whatever we can row-by-row
+        for (let i = 0; i < N; i++) {
+            let quantity = numbers[i] || 1;
+            let price = numbers[N + i] || 1000;
+            let name = stockNames[i];
+            let ticker = tickers[i] || (name.match(/[a-zA-Z]/) ? "US_STK" : "KR_STK");
+            let currency = name.match(/[a-zA-Z]/) || name.includes("미국") ? "USD" : "KRW";
+            
+            items.push({
+                name: name,
+                ticker: ticker,
+                quantity: quantity,
+                price: price,
+                current_price: price,
+                currency: currency
+            });
+        }
+    }
+    
     return items;
 }
 
@@ -1312,12 +1361,12 @@ function registerServiceWorkerLocal() {
     // Generate minimal Service Worker inline for seamless PWA execution!
     if ('serviceWorker' in navigator) {
         const swBlob = new Blob([`
-            const CACHE_NAME = 'antigravity-finance-v26';
+            const CACHE_NAME = 'antigravity-finance-v27';
             const ASSETS = [
                 './',
                 './index.html',
                 './style.css',
-                './app.js?v=26'
+                './app.js?v=27'
             ];
             self.addEventListener('install', e => {
                 e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
