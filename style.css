@@ -736,7 +736,7 @@ body.theme-cyberpunk .btn-secondary {
 }
 
 .stock-detail-val.usd {
-    color: #facc15; /* Golden Yellow for USD notation */
+    color: var(--text-dim); /* Premium neutral dim instead of bright yellow */
 }
 
 .savings-card {
