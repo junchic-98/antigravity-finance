@@ -1394,12 +1394,12 @@ function registerServiceWorkerLocal() {
     // Generate minimal Service Worker inline for seamless PWA execution!
     if ('serviceWorker' in navigator) {
         const swBlob = new Blob([`
-            const CACHE_NAME = 'antigravity-finance-v27';
+            const CACHE_NAME = 'antigravity-finance-v28';
             const ASSETS = [
                 './',
                 './index.html',
                 './style.css',
-                './app.js?v=27'
+                './app.js?v=28'
             ];
             self.addEventListener('install', e => {
                 e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
