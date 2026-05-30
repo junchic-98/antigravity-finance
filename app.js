@@ -843,7 +843,8 @@ function setupBackupAndRestore() {
             <button class="btn-secondary col-6" id="btn-import-csv-trigger" style="font-size: 12px; padding: 10px;"><i class="fa-solid fa-file-circle-plus"></i> CSV 파일 입력</button>
         </div>
         <input type="file" id="csv-file-input" accept=".csv" style="display: none;">
-        <div style="margin-top: 12px; border-top: 1px dashed var(--glass-border); padding-top: 12px; display: flex; justify-content: flex-end;">
+        <div style="margin-top: 12px; border-top: 1px dashed var(--glass-border); padding-top: 12px; display: flex; justify-content: space-between; align-items: center;">
+            <button class="btn-primary" id="btn-deduplicate-data" style="background: rgba(16, 185, 129, 0.1); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.2); font-size: 11px; padding: 6px 12px; border-radius: 8px;"><i class="fa-solid fa-broom"></i> 중복 데이터 정리</button>
             <button class="btn-secondary" id="btn-reset-data" style="background: rgba(239, 68, 68, 0.1); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.2); font-size: 11px; padding: 6px 12px; border-radius: 8px;"><i class="fa-solid fa-trash-can"></i> 전체 데이터 초기화</button>
         </div>
         <input type="file" id="backup-file-input" accept=".json" style="display: none;">
@@ -870,6 +871,26 @@ function setupBackupAndRestore() {
         linkElement.click();
         showToast("백업 완료", "백업 파일 다운로드가 시작되었습니다.");
     });
+
+    // Bind deduplicate button
+    const btnDeduplicate = document.getElementById("btn-deduplicate-data");
+    if (btnDeduplicate) {
+        btnDeduplicate.addEventListener("click", () => {
+            const originalCount = assetsData.stocks.length;
+            const merged = mergeDuplicateStocks(assetsData.stocks);
+            
+            // Save merged array back to database
+            assetsData.stocks = merged;
+            saveLocalStorageData();
+            
+            const purgedCount = originalCount - merged.length;
+            if (purgedCount > 0) {
+                showToast("중복 정리 완료", `${purgedCount}개의 중복 찌꺼기 데이터가 성공적으로 병합되었습니다!`, "success");
+            } else {
+                showToast("정리할 내역 없음", "포트폴리오에 중복된 찌꺼기 데이터가 없습니다.", "info");
+            }
+        });
+    }
 
     // Bind reset button
     document.getElementById("btn-reset-data").addEventListener("click", () => {
@@ -1007,12 +1028,12 @@ function registerServiceWorkerLocal() {
     // Generate minimal Service Worker inline for seamless PWA execution!
     if ('serviceWorker' in navigator) {
         const swBlob = new Blob([`
-            const CACHE_NAME = 'antigravity-finance-v36';
+            const CACHE_NAME = 'antigravity-finance-v37';
             const ASSETS = [
                 './',
                 './index.html',
                 './style.css',
-                './app.js?v=36'
+                './app.js?v=37'
             ];
             self.addEventListener('install', e => {
                 self.skipWaiting();
@@ -1452,7 +1473,11 @@ function handleDrawerDeleteStock() {
     if (!stock) return;
     
     if (confirm(`[${stock.brokerage}] ${stock.name} 주식을 정말로 포트폴리오에서 삭제하시겠습니까?`)) {
-        assetsData.stocks = assetsData.stocks.filter(s => s.id !== activeDrawerStockId);
+        assetsData.stocks = assetsData.stocks.filter(s => 
+            !(s.id === activeDrawerStockId || 
+              s.name.trim().toLowerCase() === stock.name.trim().toLowerCase() || 
+              (s.ticker && stock.ticker && s.ticker.trim().toLowerCase() === stock.ticker.trim().toLowerCase()))
+        );
         document.getElementById("stock-detail-drawer").style.display = "none";
         saveLocalStorageData();
         showToast("삭제 완료", "주식 항목이 포트폴리오에서 삭제되었습니다.");
@@ -1499,6 +1524,13 @@ function saveDrawerStockEdit() {
         return;
     }
     
+    // Consolidated deduplication during manual edit to purge any duplicate garbage rows
+    assetsData.stocks = assetsData.stocks.filter(s => 
+        s.id === activeDrawerStockId || 
+        !(s.name.trim().toLowerCase() === stock.name.trim().toLowerCase() || 
+          (s.ticker && stock.ticker && s.ticker.trim().toLowerCase() === stock.ticker.trim().toLowerCase()))
+    );
+
     stock.quantity = qty;
     stock.avg_purchase_price = price;
     stock.currency = currency;
