@@ -295,7 +295,7 @@ function updateUI() {
             
             card.addEventListener("dblclick", (e) => {
                 e.stopPropagation();
-                if (confirm(`[${item.brokerage || '주식계좌'}] ${item.name} 주식을 완전히 제거하시겠습니까? (연동된 모든 계좌의 보유분이 일괄 삭제됩니다)`)) {
+                if (confirm(`[${item.brokerage || '기본계좌'}] ${item.name} 주식을 완전히 제거하시겠습니까? (연동된 모든 계좌의 보유분이 일괄 삭제됩니다)`)) {
                     assetsData.stocks = assetsData.stocks.filter(s => 
                         !(s.name.toLowerCase() === item.name.toLowerCase() || 
                           (s.ticker && item.ticker && s.ticker.toLowerCase() === item.ticker.toLowerCase()))
@@ -323,6 +323,7 @@ function updateUI() {
 // Map institution names to premium icons
 function getInstitutionIcon(name) {
     if (!name || typeof name !== 'string') return `<i class="fa-solid fa-building-columns" style="color: var(--text-dim);"></i>`;
+    if (/\d/.test(name)) return `<i class="fa-solid fa-wallet" style="color: #10b981;"></i>`;
     if (name.includes("토스")) return `<i class="fa-solid fa-bolt" style="color: #3b82f6;"></i>`;
     if (name.includes("신한")) return `<i class="fa-solid fa-s" style="color: #1d4ed8;"></i>`;
     if (name.includes("국민") || name.includes("KB")) return `<i class="fa-solid fa-k" style="color: #f59e0b;"></i>`;
@@ -621,8 +622,8 @@ function openAddAssetModal(type) {
     document.getElementById("input-balance").value = "";
 
     modalTitle.textContent = "주식 포트폴리오 수동 등록";
-    instLabel.textContent = "증권사명";
-    instInput.placeholder = "예: 토스증권, 한국투자증권";
+    instLabel.textContent = "계좌번호";
+    instInput.placeholder = "예: 203-01-265287";
     if (stockFields) stockFields.style.display = "block";
     document.getElementById("group-balance-input").style.display = "block";
     document.getElementById("label-balance").textContent = "현재 주식 1주 시세";
@@ -638,7 +639,7 @@ async function submitAddAsset() {
     const currency = document.getElementById("input-currency").value;
 
     if (!institution) {
-        alert("금융사명을 입력해 주세요.");
+        alert("계좌번호를 입력해 주세요.");
         return;
     }
 
@@ -716,7 +717,7 @@ function toggleTxCategoryFields() {
 async function submitAddTx() {
     const category = document.getElementById("input-tx-category").value;
     const type = document.getElementById("input-tx-type").value;
-    const brokerage = document.getElementById("input-tx-brokerage").value.trim() || "수동금융사";
+    const brokerage = document.getElementById("input-tx-brokerage").value.trim() || "기본계좌";
     const assetName = document.getElementById("input-tx-asset-name").value.trim();
     const currency = document.getElementById("input-tx-currency").value;
 
@@ -901,12 +902,12 @@ function registerServiceWorkerLocal() {
     // Generate minimal Service Worker inline for seamless PWA execution!
     if ('serviceWorker' in navigator) {
         const swBlob = new Blob([`
-            const CACHE_NAME = 'antigravity-finance-v32';
+            const CACHE_NAME = 'antigravity-finance-v33';
             const ASSETS = [
                 './',
                 './index.html',
                 './style.css',
-                './app.js?v=32'
+                './app.js?v=33'
             ];
             self.addEventListener('install', e => {
                 self.skipWaiting();
