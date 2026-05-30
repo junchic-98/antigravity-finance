@@ -79,8 +79,6 @@ function loadLocalStorageData() {
             } else {
                 // Wipe corrupted stocks (quantity 0 or NaN)
                 assetsData.stocks = assetsData.stocks.filter(s => s.quantity > 0 && !isNaN(s.current_price));
-                // Auto-merge duplicate stocks across different brokerages!
-                assetsData.stocks = mergeDuplicateStocks(assetsData.stocks);
             }
         } catch(e) {
             console.error("Localstorage parse error, loading defaults", e);
@@ -170,10 +168,11 @@ function updateUI() {
     // 4. Render Stock Holdings
     const stocksContainer = document.getElementById("stocks-list");
     stocksContainer.innerHTML = "";
-    if (assetsData.stocks.length === 0) {
+    const displayStocks = mergeDuplicateStocks(assetsData.stocks);
+    if (displayStocks.length === 0) {
         stocksContainer.innerHTML = `<div class="asset-card" style="justify-content: center; color: var(--text-dim); font-size: 13px;">등록된 주식 자산이 없습니다.</div>`;
     } else {
-        assetsData.stocks.forEach(item => {
+        displayStocks.forEach(item => {
             try {
             const val = item.quantity * item.current_price;
             const card = document.createElement("div");
@@ -296,10 +295,13 @@ function updateUI() {
             
             card.addEventListener("dblclick", (e) => {
                 e.stopPropagation();
-                if (confirm(`[${item.brokerage || '주식계좌'}] ${item.name} 주식을 제거하시겠습니까?`)) {
-                    assetsData.stocks = assetsData.stocks.filter(s => s.id !== item.id);
+                if (confirm(`[${item.brokerage || '주식계좌'}] ${item.name} 주식을 완전히 제거하시겠습니까? (연동된 모든 계좌의 보유분이 일괄 삭제됩니다)`)) {
+                    assetsData.stocks = assetsData.stocks.filter(s => 
+                        !(s.name.toLowerCase() === item.name.toLowerCase() || 
+                          (s.ticker && item.ticker && s.ticker.toLowerCase() === item.ticker.toLowerCase()))
+                    );
                     saveLocalStorageData();
-                    showToast("삭제 완료", "주식 항목이 포트폴리오에서 삭제되었습니다.");
+                    showToast("삭제 완료", "주식 항목이 포트폴리오에서 일괄 삭제되었습니다.");
                 }
             });
             stocksContainer.appendChild(card);
@@ -367,7 +369,8 @@ function renderSVGDonutChart(stocksTotal) {
     const segments = [];
     
     // Add Stocks segments dynamically
-    assetsData.stocks.forEach((item, idx) => {
+    const displayStocks = mergeDuplicateStocks(assetsData.stocks);
+    displayStocks.forEach((item, idx) => {
         const val = item.quantity * item.current_price * (item.currency === "USD" ? rate : 1);
         const colorIdx = idx % colors.length;
         segments.push({
@@ -631,6 +634,7 @@ function openAddAssetModal(type) {
 async function submitAddAsset() {
     const type = document.getElementById("asset-type-hidden").value;
     const institution = document.getElementById("input-institution").value.trim();
+    const accountNumber = document.getElementById("input-account-number") ? document.getElementById("input-account-number").value.trim() : "";
     const currency = document.getElementById("input-currency").value;
 
     if (!institution) {
@@ -656,6 +660,7 @@ async function submitAddAsset() {
     const newStock = {
         id: `stock_${Date.now()}`,
         brokerage: institution,
+        account_number: accountNumber, // Store account number
         name: stockName,
         ticker: ticker,
         quantity: qty,
@@ -664,7 +669,6 @@ async function submitAddAsset() {
         currency: currency
     };
     assetsData.stocks.push(newStock);
-    assetsData.stocks = mergeDuplicateStocks(assetsData.stocks);
 
     closeModal("modal-add-asset");
     saveLocalStorageData();
@@ -947,8 +951,15 @@ async function handleScreenshotFileLocal(file) {
         let detectedData = {
             "institution": "기타증권",
             "type": "stock",
+            "account_number": "",
             "extracted_items": []
         };
+        
+        // Detect Account Number (Format like 203-01-265287)
+        const accMatch = text.match(/\b\d{3}-\d{2,3}-\d{5,8}\b/);
+        if (accMatch) {
+            detectedData.account_number = accMatch[0];
+        }
         
         // Detect Brokerage
         if (text.includes("나무증권") || text.includes("나무")) detectedData.institution = "나무증권";
@@ -1061,6 +1072,10 @@ function openScanConfirmModal(detectedData) {
     const itemsContainer = document.getElementById("scan-confirm-items");
     
     instInput.value = detectedData.institution;
+    const accNoInput = document.getElementById("scan-confirm-account-number");
+    if (accNoInput) {
+        accNoInput.value = detectedData.account_number || "";
+    }
     itemsContainer.innerHTML = "";
 
     detectedData.extracted_items.forEach((item, index) => {
@@ -1121,12 +1136,18 @@ function openScanConfirmModal(detectedData) {
 
 async function submitScanConfirm() {
     const institution = document.getElementById("scan-confirm-institution").value.trim();
+    const accountNumber = document.getElementById("scan-confirm-account-number").value.trim();
     const type = screenshotResultCache.type;
     const itemGroups = document.querySelectorAll(".scan-item-group");
 
     if (!institution) {
         alert("분석된 금융사명을 입력해 주세요.");
         return;
+    }
+
+    // Overwrite behavior: if account number is provided, wipe all existing stock holdings in assetsData belonging to this account first!
+    if (type === "stock" && accountNumber) {
+        assetsData.stocks = assetsData.stocks.filter(s => s.account_number !== accountNumber);
     }
 
     itemGroups.forEach(group => {
@@ -1140,6 +1161,7 @@ async function submitScanConfirm() {
             assetsData.stocks.push({
                 id: `stock_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
                 brokerage: institution,
+                account_number: accountNumber, // Store account number
                 name: name,
                 ticker: ticker,
                 quantity: quantity,
@@ -1157,17 +1179,13 @@ async function submitScanConfirm() {
                 id: `savings_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
                 bank: institution,
                 account_name: accName,
-                account_number: accNum,
+                account_number: accNum || accountNumber,
                 balance: balance,
                 currency: currency,
                 type: "deposit"
             });
         }
     });
-
-    if (type === "stock") {
-        assetsData.stocks = mergeDuplicateStocks(assetsData.stocks);
-    }
 
     closeModal("modal-scan-confirm");
     saveLocalStorageData();
@@ -1248,12 +1266,12 @@ function registerServiceWorkerLocal() {
     // Generate minimal Service Worker inline for seamless PWA execution!
     if ('serviceWorker' in navigator) {
         const swBlob = new Blob([`
-            const CACHE_NAME = 'antigravity-finance-v22';
+            const CACHE_NAME = 'antigravity-finance-v23';
             const ASSETS = [
                 './',
                 './index.html',
                 './style.css',
-                './app.js?v=22'
+                './app.js?v=23'
             ];
             self.addEventListener('install', e => {
                 e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
@@ -2047,7 +2065,8 @@ function renderAnalysisDonutChart(stocksTotal) {
     const segments = [];
     const rate = assetsData.summary.usd_krw_rate || 1350.0;
     
-    assetsData.stocks.forEach((item, idx) => {
+    const displayStocks = mergeDuplicateStocks(assetsData.stocks);
+    displayStocks.forEach((item, idx) => {
         const val = item.quantity * item.current_price * (item.currency === "USD" ? rate : 1);
         segments.push({
             name: item.name,
