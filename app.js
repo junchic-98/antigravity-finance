@@ -91,8 +91,104 @@ function loadLocalStorageData() {
     }
 }
 
+
+// Mathematically synchronize all stock holdings with their transaction history
+function syncHoldingsWithTransactions() {
+    if (!assetsData.transactions || assetsData.transactions.length === 0) return;
+    
+    // 1. Group transactions by (asset_name, brokerage_or_bank)
+    const txGroups = {};
+    assetsData.transactions.forEach(tx => {
+        if (tx.category !== "stock") return;
+        const key = `${tx.asset_name.trim().toLowerCase()}|||${tx.brokerage_or_bank.trim()}`;
+        if (!txGroups[key]) {
+            txGroups[key] = [];
+        }
+        txGroups[key].push(tx);
+    });
+
+    // 2. For each group, calculate total quantity and weighted average price chronologically
+    const computedStocks = {};
+    Object.entries(txGroups).forEach(([key, txs]) => {
+        const sortedTxs = [...txs].sort((a, b) => new Date(a.date) - new Date(b.date));
+        
+        let qty = 0;
+        let totalCost = 0;
+        let currency = "KRW";
+        let ticker = "KR_STK";
+        
+        sortedTxs.forEach(tx => {
+            currency = tx.currency || "KRW";
+            if (tx.ticker && tx.ticker !== "KR_STK") {
+                ticker = tx.ticker;
+            } else if (tx.asset_name.match(/[a-zA-Z]/)) {
+                ticker = tx.asset_name.toUpperCase();
+            }
+            
+            if (tx.type === "buy") {
+                const txQty = parseFloat(tx.quantity) || 0;
+                const txPrice = parseFloat(tx.price) || 0;
+                
+                if (txQty > 0) {
+                    totalCost = ((qty * totalCost) + (txQty * txPrice)) / (qty + txQty || 1);
+                    qty += txQty;
+                }
+            } else if (tx.type === "sell") {
+                const txQty = parseFloat(tx.quantity) || 0;
+                qty = Math.max(0, qty - txQty);
+            }
+        });
+        
+        computedStocks[key] = {
+            name: txs[0].asset_name,
+            brokerage: txs[0].brokerage_or_bank,
+            quantity: qty,
+            avg_purchase_price: totalCost,
+            currency: currency,
+            ticker: ticker
+        };
+    });
+
+    // 3. Update assetsData.stocks
+    Object.entries(computedStocks).forEach(([key, comp]) => {
+        const [name, brokerage] = key.split("|||");
+        const existingIdx = assetsData.stocks.findIndex(s => 
+            s.name.trim().toLowerCase() === name && 
+            s.brokerage.trim().toLowerCase() === brokerage.toLowerCase()
+        );
+        
+        if (existingIdx !== -1) {
+            const existing = assetsData.stocks[existingIdx];
+            if (comp.quantity > 0) {
+                existing.quantity = comp.quantity;
+                existing.avg_purchase_price = comp.avg_purchase_price;
+                existing.currency = comp.currency;
+                if (comp.ticker && comp.ticker !== "KR_STK") {
+                    existing.ticker = comp.ticker;
+                }
+            } else {
+                // Remove stock if quantity is 0
+                assetsData.stocks.splice(existingIdx, 1);
+            }
+        } else if (comp.quantity > 0) {
+            // Add new stock row
+            assetsData.stocks.push({
+                id: `stock_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+                brokerage: comp.brokerage,
+                name: comp.name,
+                ticker: comp.ticker,
+                quantity: comp.quantity,
+                avg_purchase_price: comp.avg_purchase_price,
+                current_price: comp.avg_purchase_price, 
+                currency: comp.currency
+            });
+        }
+    });
+}
+
 // 2. Data save to phone LocalStorage
 function saveLocalStorageData() {
+    syncHoldingsWithTransactions();
     localStorage.setItem("antigravity_assets_data", JSON.stringify(assetsData));
     updateUI();
 }
@@ -480,7 +576,7 @@ function renderTransactions() {
         else if (tx.type === "deposit") iconClass += "fa-arrow-down-to-bracket";
         else if (tx.type === "withdraw") iconClass += "fa-arrow-up-from-bracket";
 
-        const isPlus = tx.type === "sell" || tx.type === "deposit";
+        const isPlus = tx.type === "buy" || tx.type === "deposit";
         const sign = isPlus ? "+" : "-";
         const amtClass = isPlus ? "plus" : "minus";
 
@@ -690,6 +786,16 @@ function populateOwnedStocksDatalist() {
 }
 
 function openAddTxModal() {
+    activeEditTxId = null; // Reset edit state
+    
+    const modalTitle = document.querySelector("#modal-add-tx .modal-title");
+    if (modalTitle) modalTitle.textContent = "거래 내역 직접 등록";
+    
+    const submitBtn = document.querySelector("#modal-add-tx .btn-primary");
+    if (submitBtn) {
+        submitBtn.innerHTML = `<i class="fa-solid fa-circle-check"></i> 등록 완료`;
+    }
+
     populateOwnedStocksDatalist();
     document.getElementById("input-tx-brokerage").value = "";
     document.getElementById("input-tx-asset-name").value = "";
@@ -751,52 +857,32 @@ async function submitAddTx() {
         amount = parseFloat(document.getElementById("input-tx-amount").value) || 0;
     }
 
-    const newTx = {
-        id: `tx_${Date.now()}`,
-        date: new Date().toISOString(),
-        type: type,
-        category: category,
-        asset_name: assetName,
-        brokerage_or_bank: brokerage,
-        quantity: qty,
-        price: price,
-        amount: amount,
-        currency: currency
-    };
-
-    assetsData.transactions.unshift(newTx);
-
-    // Apply adjustments to active holdings
-    if (category === "stock") {
-        let stockFound = false;
-        for (let stock of assetsData.stocks) {
-            if (stock.name.toLowerCase() === assetName.toLowerCase() && stock.brokerage === brokerage) {
-                if (type === "buy") {
-                    const newQty = stock.quantity + qty;
-                    if (newQty > 0) {
-                        stock.avg_purchase_price = ((stock.quantity * stock.avg_purchase_price) + (qty * price)) / newQty;
-                    }
-                    stock.quantity = newQty;
-                } else if (type === "sell") {
-                    stock.quantity = Math.max(0, stock.quantity - qty);
-                }
-                stock.current_price = price;
-                stockFound = true;
-                break;
-            }
+    if (activeEditTxId) {
+        const tx = assetsData.transactions.find(t => t.id === activeEditTxId);
+        if (tx) {
+            tx.category = category;
+            tx.type = type;
+            tx.brokerage_or_bank = brokerage;
+            tx.asset_name = assetName;
+            tx.currency = currency;
+            tx.quantity = qty;
+            tx.price = price;
+            tx.amount = amount;
         }
-        if (!stockFound && type === "buy") {
-            assetsData.stocks.push({
-                id: `stock_${Date.now()}`,
-                brokerage: brokerage,
-                name: assetName,
-                ticker: assetName.match(/[a-zA-Z]/) ? assetName.toUpperCase() : "KR_STK",
-                quantity: qty,
-                avg_purchase_price: price,
-                current_price: price,
-                currency: currency
-            });
-        }
+    } else {
+        const newTx = {
+            id: `tx_${Date.now()}`,
+            date: new Date().toISOString(),
+            type: type,
+            category: category,
+            asset_name: assetName,
+            brokerage_or_bank: brokerage,
+            quantity: qty,
+            price: price,
+            amount: amount,
+            currency: currency
+        };
+        assetsData.transactions.unshift(newTx);
     }
 
     closeModal("modal-add-tx");
@@ -1028,12 +1114,12 @@ function registerServiceWorkerLocal() {
     // Generate minimal Service Worker inline for seamless PWA execution!
     if ('serviceWorker' in navigator) {
         const swBlob = new Blob([`
-            const CACHE_NAME = 'antigravity-finance-v37';
+            const CACHE_NAME = 'antigravity-finance-v38';
             const ASSETS = [
                 './',
                 './index.html',
                 './style.css',
-                './app.js?v=37'
+                './app.js?v=38'
             ];
             self.addEventListener('install', e => {
                 self.skipWaiting();
@@ -1213,10 +1299,7 @@ async function updateStockPrices() {
                         }
                     }
                     
-                    // Weekend/holiday override: if both yesterday and today are weekends/holidays, set previous_close equal to current_price
-                    if (checkIfBothDaysAreHolidaysOrWeekends(stock.currency, stock.ticker)) {
-                        stock.previous_close = stock.current_price;
-                    }
+
                     
                     updatedCount++;
                 }
@@ -1301,6 +1384,19 @@ window.addEventListener("DOMContentLoaded", () => {
     const syncBtn = document.getElementById("btn-sync-prices");
     if (syncBtn) {
         syncBtn.addEventListener("click", updateStockPrices);
+    }
+
+    // Auto-fill brokerage/account number when typing stock name
+    const assetInput = document.getElementById("input-tx-asset-name");
+    if (assetInput) {
+        assetInput.addEventListener("input", (e) => {
+            const val = e.target.value.trim().toLowerCase();
+            if (!val) return;
+            const matched = assetsData.stocks.find(s => s.name.toLowerCase() === val);
+            if (matched && matched.brokerage) {
+                document.getElementById("input-tx-brokerage").value = matched.brokerage;
+            }
+        });
     }
 
     // 8.5 Immediately render the UI synchronously so the app loads instantly!
@@ -1711,6 +1807,7 @@ function switchAnalysisView(view) {
     document.getElementById("analysis-stock-view").style.display = view === "stock" ? "block" : "none";
     document.getElementById("analysis-country-view").style.display = view === "country" ? "block" : "none";
     document.getElementById("analysis-sector-view").style.display = view === "sector" ? "block" : "none";
+    document.getElementById("analysis-account-view").style.display = view === "account" ? "block" : "none";
     
     renderAnalysisViews();
 }
@@ -1781,6 +1878,58 @@ function renderAnalysisViews() {
             krwItem.querySelector(".gauge-fill").style.width = `${krwPct}%`;
             usdItem.querySelector(".gauge-fill").style.width = `${usdPct}%`;
         }, 100);
+    }
+
+    
+    // Render Account Allocation Breakdown
+    const accountContainer = document.getElementById("analysis-account-list");
+    if (accountContainer) {
+        accountContainer.innerHTML = "";
+        
+        const accountSums = {};
+        assetsData.stocks.forEach(item => {
+            const val = item.quantity * item.current_price * (item.currency === "USD" ? rate : 1);
+            const acc = item.brokerage || "기본계좌";
+            accountSums[acc] = (accountSums[acc] || 0) + val;
+        });
+        
+        const getAccountGradient = (index) => {
+            const hues = [210, 280, 45, 150, 330, 190];
+            const h = hues[index % hues.length];
+            return `linear-gradient(90deg, hsl(${h}, 80%, 65%) 0%, hsl(${h}, 80%, 45%) 100%)`;
+        };
+        
+        const sortedAccounts = Object.entries(accountSums).sort((a, b) => b[1] - a[1]);
+        
+        sortedAccounts.forEach(([accName, accVal], idx) => {
+            const pct = grandTotal > 0 ? (accVal / grandTotal) * 100 : 0;
+            if (accVal <= 0) return;
+            
+            const accItem = document.createElement("div");
+            accItem.className = "gauge-item";
+            
+            const iconHtml = getInstitutionIcon(accName);
+            
+            accItem.innerHTML = `
+                <div class="gauge-meta">
+                    <span class="gauge-label">${iconHtml} ${accName}</span>
+                    <span class="gauge-percentage">${Math.round(pct)}%</span>
+                </div>
+                <div class="gauge-track">
+                    <div class="gauge-fill" style="width: 0%; background: ${getAccountGradient(idx)};"></div>
+                </div>
+                <div class="gauge-details">
+                    <span>원화 환산 평가액</span>
+                    <span style="font-weight: 600; color: var(--text-main);">${formatCurrency(accVal, "KRW")}</span>
+                </div>
+            `;
+            accountContainer.appendChild(accItem);
+            
+            setTimeout(() => {
+                const fill = accItem.querySelector(".gauge-fill");
+                if (fill) fill.style.width = `${pct}%`;
+            }, 100);
+        });
     }
 
     const sectorContainer = document.getElementById("analysis-sector-list");
@@ -1927,6 +2076,38 @@ function renderAnalysisDonutChart(stocksTotal) {
 
 // --- Luxury Digital Statement Receipts Modal ---
 let activeReceiptTxId = null;
+let activeEditTxId = null;
+
+
+function openEditTxModal(tx) {
+    activeEditTxId = tx.id;
+    
+    document.getElementById("input-tx-category").value = tx.category;
+    toggleTxCategoryFields();
+    
+    document.getElementById("input-tx-type").value = tx.type;
+    document.getElementById("input-tx-brokerage").value = tx.brokerage_or_bank || "";
+    document.getElementById("input-tx-asset-name").value = tx.asset_name || "";
+    document.getElementById("input-tx-currency").value = tx.currency || "KRW";
+    
+    if (tx.category === "stock") {
+        document.getElementById("input-tx-qty").value = tx.quantity || "";
+        document.getElementById("input-tx-price").value = tx.price || "";
+        document.getElementById("input-tx-amount").value = tx.amount || "";
+    } else {
+        document.getElementById("input-tx-amount").value = tx.amount || "";
+    }
+    
+    const modalTitle = document.querySelector("#modal-add-tx .modal-title");
+    if (modalTitle) modalTitle.textContent = "거래 내역 수정";
+    
+    const submitBtn = document.querySelector("#modal-add-tx .btn-primary");
+    if (submitBtn) {
+        submitBtn.innerHTML = `<i class="fa-solid fa-circle-check"></i> 수정 완료`;
+    }
+    
+    openModal("modal-add-tx");
+}
 
 function openTxReceipt(tx) {
     activeReceiptTxId = tx.id;
@@ -1962,6 +2143,16 @@ function openTxReceipt(tx) {
     const numericOnly = tx.id.replace(/[^0-9]/g, '');
     const barcodeText = numericOnly ? numericOnly.slice(0, 14).padEnd(14, '0') : "20260523" + String(Math.floor(Math.random()*1000000)).padStart(6, '0');
     document.getElementById("receipt-barcode-text").textContent = barcodeText;
+    
+    const btnEdit = document.getElementById("btn-edit-tx-trigger");
+    if (btnEdit) {
+        const newBtn = btnEdit.cloneNode(true);
+        btnEdit.parentNode.replaceChild(newBtn, btnEdit);
+        newBtn.addEventListener("click", () => {
+            closeModal("modal-tx-receipt");
+            openEditTxModal(tx);
+        });
+    }
     
     openModal("modal-tx-receipt");
 }
