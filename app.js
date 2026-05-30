@@ -797,491 +797,22 @@ async function submitAddTx() {
 // --------------------------------------------------------------------------
 let screenshotResultCache = null;
 
-function setupUploader() {
-    const dropzone = document.getElementById("upload-zone");
-    const input = document.getElementById("screenshot-input");
-    
-    dropzone.addEventListener("dragover", (e) => {
-        e.preventDefault();
-        dropzone.classList.add("dragover");
-    });
 
-    dropzone.addEventListener("dragleave", () => {
-        dropzone.classList.remove("dragover");
-    });
-
-    dropzone.addEventListener("drop", (e) => {
-        e.preventDefault();
-        dropzone.classList.remove("dragover");
-        if (e.dataTransfer.files.length > 0) {
-            handleScreenshotFileLocal(e.dataTransfer.files[0]);
-        }
-    });
-
-    input.addEventListener("change", (e) => {
-        if (input.files.length > 0) {
-            handleScreenshotFileLocal(input.files[0]);
-        }
-    });
-}
 
 // Parse Korean brokerage holdings table screenshots with structured row parsing
-function parseTableOCR(text) {
-    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-    const items = [];
-    
-    let tableStarted = false;
-    // Strict headers that ONLY exist on the table column header row to avoid matching the CMA summary area
-    const headerKeywords = ["종목명", "잔고수량", "매입가"];
-    const footerKeywords = [
-        "원화로 표기", "외화로 표기", "표기 중", "표기중", 
-        "이체", "환경설정", "주식현재가", "주식주문", "국내주식", "해외주식", "뱅킹", "계좌개설", "메뉴", "비용포함"
-    ];
-    
-    const stockBlocks = [];
-    let currentBlock = null;
-    
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        
-        // 1. Detect table start strictly
-        if (!tableStarted) {
-            for (let hk of headerKeywords) {
-                if (line.includes(hk)) {
-                    tableStarted = true;
-                    break;
-                }
-            }
-            continue;
-        }
-        
-        // 2. Detect table end
-        let isFooter = false;
-        for (let fk of footerKeywords) {
-            if (line.toLowerCase().includes(fk.toLowerCase())) {
-                isFooter = true;
-                break;
-            }
-        }
-        if (isFooter) {
-            break;
-        }
-        
-        // 3. Extract numbers from this line
-        const lineNumbers = [];
-        if (!line.includes('%')) {
-            const cleanLine = line.replace(/,/g, '').trim();
-            const matches = cleanLine.match(/\b\d+(?:\.\d+)?\b/g);
-            if (matches) {
-                matches.forEach(m => {
-                    const val = parseFloat(m);
-                    if (!isNaN(val)) lineNumbers.push(val);
-                });
-            }
-        }
-        
-        // 4. Clean name candidate
-        let nameCandidate = line.replace(/\b\d+(?:\.\d+)?\b/g, '').replace(/,/g, '').replace(/[\(\)\-\.\,\/\s%]+/g, ' ').trim();
-        const wordsToIgnore = [
-            "국내", "미국", "해외", "현금", "평가손익", "수익률", "잔고수량", "평가금액", "매입가", "현재가", "종목명", "구분",
-            "순자산", "예수금", "매입금액", "매매손익", "전체잔고"
-        ];
-        for (let w of wordsToIgnore) {
-            nameCandidate = nameCandidate.replace(new RegExp('\\b' + w + '\\b', 'gi'), '');
-        }
-        nameCandidate = nameCandidate.trim();
-        
-        // Ignore single letter misreads (like "E", "EE") or lines containing purely non-alphanumeric noise
-        const isValidName = nameCandidate.length >= 2 && 
-                            /[가-힣a-zA-Z]/.test(nameCandidate) && 
-                            !/^[0-9\s]+$/.test(nameCandidate) && 
-                            nameCandidate.toUpperCase() !== "EE" && 
-                            nameCandidate.toUpperCase() !== "E";
-        
-        if (isValidName) {
-            let ticker = "";
-            const tickerMatch = line.match(/\(([A-Z0-9\.]+)\)/i);
-            if (tickerMatch) {
-                ticker = tickerMatch[1].toUpperCase();
-            }
-            
-            currentBlock = {
-                name: nameCandidate,
-                ticker: ticker,
-                numbers: []
-            };
-            stockBlocks.push(currentBlock);
-        }
-        
-        // Capture ticker printed on adjacent lines (like cash or country metadata rows)
-        const adjTickerMatch = line.match(/\(([A-Z0-9\.]+)\)/i);
-        if (adjTickerMatch && currentBlock && !currentBlock.ticker) {
-            currentBlock.ticker = adjTickerMatch[1].toUpperCase();
-        }
-        
-        // Add numbers found in this line to the current active stock block
-        if (currentBlock && lineNumbers.length > 0) {
-            currentBlock.numbers.push(...lineNumbers);
-        }
-    }
-    
-    // Process each stock block
-    stockBlocks.forEach(block => {
-        const N = block.numbers.length;
-        if (N === 0) return;
-        
-        let quantity = 1;
-        let price = 1000;
-        
-        if (N >= 5) {
-            quantity = block.numbers[1];
-            price = block.numbers[3];
-        } else if (N >= 4) {
-            quantity = block.numbers[1];
-            price = block.numbers[2];
-        } else if (N >= 2) {
-            quantity = block.numbers[0];
-            price = block.numbers[1];
-        } else {
-            quantity = block.numbers[0] || 1;
-            price = 1000;
-        }
-        
-        // Self-correction check: Quantity is always the smaller integer/decimal compared to purchase price
-        if (quantity > price && price > 0) {
-            const temp = quantity;
-            quantity = price;
-            price = temp;
-        }
-        
-        let name = block.name;
-        let ticker = block.ticker;
-        let currency = "KRW";
-        
-        if (name.match(/[a-zA-Z]/) || ticker || name.includes("미국") || name.includes("해외")) {
-            currency = "USD";
-        }
-        if (!ticker) {
-            ticker = currency === "USD" ? "US_STK" : "KR_STK";
-        }
-        
-        // Smart auto-mapping of common Korean stocks
-        if (currency === "KRW" && (ticker === "KR_STK" || !ticker)) {
-            const dict = {
-                "삼성전자": "005930",
-                "SK하이닉스": "000660",
-                "현대차": "005380",
-                "현대자동차": "005380",
-                "네이버": "035420",
-                "NAVER": "035420",
-                "카카오": "035720",
-                "TIGER 미국나스닥100레버리지": "418660",
-                "ACE 미국빅테크TOP7 Plus레버리지": "465580"
-            };
-            for (let key in dict) {
-                if (name.includes(key)) {
-                    ticker = dict[key];
-                    break;
-                }
-            }
-        }
-        
-        items.push({
-            name: name,
-            ticker: ticker,
-            quantity: quantity,
-            price: price,
-            current_price: price,
-            currency: currency
-        });
-    });
-    
-    return items;
-}
+
 
 // Process OCR loading sequences inside the browser (zero server dependencies!)
-async function handleScreenshotFileLocal(file) {
-    const loader = document.getElementById("scan-loading");
-    const stepText = document.getElementById("scan-step-text");
-    
-    loader.style.display = "flex";
-    stepText.textContent = "AI 비전 엔진 초기화 및 언어 팩 로드 중... (최초 1회 시 시간이 소요됩니다)";
-    
-    try {
-        if (typeof Tesseract === "undefined") {
-            alert("OCR 엔진을 불러오지 못했습니다. 네트워크 상태를 확인하거나 페이지를 새로고침 해주세요.");
-            loader.style.display = "none";
-            return;
-        }
 
-        // Run Tesseract.js OCR (Kor + Eng)
-        const result = await Tesseract.recognize(
-            file,
-            'kor+eng',
-            { logger: m => {
-                if (m.status === "recognizing text") {
-                    stepText.textContent = `주식 잔고 텍스트 판독 중... (${Math.round(m.progress * 100)}%)`;
-                }
-            }}
-        );
 
-        const text = result.data.text;
-        console.log("OCR Extracted Text:", text);
-        
-        stepText.textContent = "금융 데이터 추출 및 자산 구조화 중...";
 
-        let detectedData = {
-            "institution": "기타증권",
-            "type": "stock",
-            "account_number": "",
-            "extracted_items": []
-        };
-        
-        // Detect Account Number (Format like 203-01-265287)
-        const accMatch = text.match(/\b\d{3}-\d{2,3}-\d{5,8}\b/);
-        if (accMatch) {
-            detectedData.account_number = accMatch[0];
-        }
-        
-        // Detect Brokerage
-        if (text.includes("나무증권") || text.includes("나무")) detectedData.institution = "나무증권";
-        else if (text.includes("한국투자") || text.includes("한국 투자") || text.includes("한투")) detectedData.institution = "한국투자증권";
-        else if (text.includes("토스") || text.includes("toss")) detectedData.institution = "토스증권";
-        else if (text.includes("KB") || text.includes("국민") || text.includes("주식 잔고") || text.includes("CMA")) detectedData.institution = "KB증권";
-        else if (text.includes("미래에셋")) detectedData.institution = "미래에셋증권";
-        else if (text.includes("삼성증권")) detectedData.institution = "삼성증권";
-        
-        // 1. Try Structured holdings table parsing first
-        const tableItems = parseTableOCR(text);
-        if (tableItems && tableItems.length > 0) {
-            detectedData.extracted_items = tableItems;
-        } else {
-            // 2. Fallback to natural text / KakaoTalk notification message matching
-            let remainingText = text;
-            while (remainingText.length > 0) {
-                let stockName = "알 수 없음";
-            let quantity = 0;
-            let price = 0;
-            let foundAny = false;
-            
-            // Specific Key-Value Regex Matching
-            const nameMatch = remainingText.match(/(?:종목명|종목)\s*[:\-]?\s*([가-힣a-zA-Z0-9\s]+?)(?=\n|$|체결|수량|단가)/i);
-            const qtyMatch = remainingText.match(/(?:체결수량|매수수량|수량)\s*[:\-]?\s*([0-9,]+)/i);
-            const priceMatch = remainingText.match(/(?:체결단가|매수단가|단가|금액|가격)\s*[:\-]?\s*([0-9,]+(?:\.[0-9]+)?)/i);
-
-            if (nameMatch) {
-                stockName = nameMatch[1].trim();
-                remainingText = remainingText.replace(nameMatch[0], "");
-                foundAny = true;
-            }
-            if (qtyMatch) {
-                quantity = parseInt(qtyMatch[1].replace(/,/g, ''), 10);
-                remainingText = remainingText.replace(qtyMatch[0], "");
-                foundAny = true;
-            }
-            if (priceMatch) {
-                price = parseFloat(priceMatch[1].replace(/,/g, ''));
-                remainingText = remainingText.replace(priceMatch[0], "");
-                foundAny = true;
-            }
-
-            // Fallback Regex for Natural Text (e.g., "10주", "72,000원")
-            if (quantity === 0) {
-                const fallbackQty = remainingText.match(/([0-9,]+)\s*(?:주|주 체결|개)/);
-                if (fallbackQty) {
-                    quantity = parseInt(fallbackQty[1].replace(/,/g, ''), 10);
-                    remainingText = remainingText.replace(fallbackQty[0], "");
-                    foundAny = true;
-                }
-            }
-            if (price === 0) {
-                const fallbackPrice = remainingText.match(/([0-9,]+(?:\.[0-9]+)?)\s*(?:원|달러|USD)/);
-                if (fallbackPrice) {
-                    price = parseFloat(fallbackPrice[1].replace(/,/g, ''));
-                    remainingText = remainingText.replace(fallbackPrice[0], "");
-                    foundAny = true;
-                }
-            }
-            
-            // If absolutely nothing was found in this pass, break the loop
-            if (!foundAny) {
-                break;
-            }
-
-            let currency = "KRW";
-            if (text.includes("USD") || text.includes("달러") || text.includes("미국") || stockName.match(/^[a-zA-Z\s]+$/)) {
-                currency = "USD";
-            }
-            
-            // Only add if we actually extracted meaningful numbers or a name
-            if (quantity > 0 || price > 0 || stockName !== "알 수 없음") {
-                detectedData.extracted_items.push({
-                    "name": stockName !== "알 수 없음" ? stockName : "추출된 종목",
-                    "ticker": "", 
-                    "quantity": quantity > 0 ? quantity : 1,
-                    "price": price > 0 ? price : 1000,
-                    "currency": currency
-                });
-            }
-        }
-    }
-        
-        // If the entire text yielded absolutely nothing
-        if (detectedData.extracted_items.length === 0) {
-            detectedData.extracted_items.push({
-                "name": "인식 실패 - 수동 수정 필요",
-                "ticker": "",
-                "quantity": 1,
-                "price": 1000,
-                "currency": "KRW"
-            });
-            alert("알림톡 내용을 완벽하게 스캔하지 못했습니다. 수동으로 값을 입력해주세요.");
-        }
-        
-        loader.style.display = "none";
-        openScanConfirmModal(detectedData);
-
-    } catch (err) {
-        console.error("OCR Error", err);
-        alert("이미지 처리 중 오류가 발생했습니다. 다시 시도해주세요.");
-        loader.style.display = "none";
-    }
-}
-
-function openScanConfirmModal(detectedData) {
-    screenshotResultCache = detectedData;
-    const instInput = document.getElementById("scan-confirm-institution");
-    const itemsContainer = document.getElementById("scan-confirm-items");
-    
-    instInput.value = detectedData.institution;
-    const accNoInput = document.getElementById("scan-confirm-account-number");
-    if (accNoInput) {
-        accNoInput.value = detectedData.account_number || "";
-    }
-    itemsContainer.innerHTML = "";
-
-    detectedData.extracted_items.forEach((item, index) => {
-        const itemGroup = document.createElement("div");
-        itemGroup.className = "scan-item-group";
-        
-        if (detectedData.type === "stock") {
-            itemGroup.innerHTML = `
-                <h4 class="form-label" style="margin-bottom: 6px; color: var(--color-accent);">감지 항목 ${index + 1} (주식)</h4>
-                <div class="form-row" style="margin-bottom: 8px;">
-                    <div class="form-group col-6">
-                        <label class="form-label">주식명</label>
-                        <input type="text" class="form-input scan-input-name" value="${item.name}">
-                    </div>
-                    <div class="form-group col-6">
-                        <label class="form-label">티커</label>
-                        <input type="text" class="form-input scan-input-ticker" value="${item.ticker}">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group col-6">
-                        <label class="form-label">보유 수량</label>
-                        <input type="number" class="form-input scan-input-qty" value="${item.quantity}" step="any">
-                    </div>
-                    <div class="form-group col-6">
-                        <label class="form-label">체결 시세</label>
-                        <input type="number" class="form-input scan-input-price" value="${item.price}">
-                    </div>
-                </div>
-                <input type="hidden" class="scan-input-currency" value="${item.currency}">
-            `;
-        } else {
-            itemGroup.innerHTML = `
-                <h4 class="form-label" style="margin-bottom: 6px; color: var(--color-primary);">감지 항목 ${index + 1} (금융계좌)</h4>
-                <div class="form-group" style="margin-bottom: 8px;">
-                    <label class="form-label">계좌명</label>
-                    <input type="text" class="form-input scan-input-accname" value="${item.account_name}">
-                </div>
-                <div class="form-row">
-                    <div class="form-group col-7">
-                        <label class="form-label">계좌번호</label>
-                        <input type="text" class="form-input scan-input-accnum" value="${item.account_number}">
-                    </div>
-                    <div class="form-group col-5">
-                        <label class="form-label">현재 잔고</label>
-                        <input type="number" class="form-input scan-input-balance" value="${item.balance}">
-                    </div>
-                </div>
-                <input type="hidden" class="scan-input-currency" value="${item.currency}">
-            `;
-        }
-        
-        itemsContainer.appendChild(itemGroup);
-    });
-
-    openModal("modal-scan-confirm");
-}
-
-async function submitScanConfirm() {
-    const institution = document.getElementById("scan-confirm-institution").value.trim();
-    const accountNumber = document.getElementById("scan-confirm-account-number").value.trim();
-    const type = screenshotResultCache.type;
-    const itemGroups = document.querySelectorAll(".scan-item-group");
-
-    if (!institution) {
-        alert("분석된 금융사명을 입력해 주세요.");
-        return;
-    }
-
-    // Overwrite behavior: if account number is provided, wipe all existing stock holdings in assetsData belonging to this account first!
-    if (type === "stock" && accountNumber) {
-        assetsData.stocks = assetsData.stocks.filter(s => s.account_number !== accountNumber);
-    }
-
-    itemGroups.forEach(group => {
-        if (type === "stock") {
-            const name = group.querySelector(".scan-input-name").value.trim();
-            const ticker = group.querySelector(".scan-input-ticker").value.trim();
-            const quantity = parseFloat(group.querySelector(".scan-input-qty").value) || 0;
-            const price = parseFloat(group.querySelector(".scan-input-price").value) || 0;
-            const currency = group.querySelector(".scan-input-currency").value;
-
-            assetsData.stocks.push({
-                id: `stock_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-                brokerage: institution,
-                account_number: accountNumber, // Store account number
-                name: name,
-                ticker: ticker,
-                quantity: quantity,
-                avg_purchase_price: price,
-                current_price: price,
-                currency: currency
-            });
-        } else {
-            const accName = group.querySelector(".scan-input-accname").value.trim();
-            const accNum = group.querySelector(".scan-input-accnum").value.trim();
-            const balance = parseFloat(group.querySelector(".scan-input-balance").value) || 0;
-            const currency = group.querySelector(".scan-input-currency").value;
-
-            assetsData.savings.push({
-                id: `savings_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-                bank: institution,
-                account_name: accName,
-                account_number: accNum || accountNumber,
-                balance: balance,
-                currency: currency,
-                type: "deposit"
-            });
-        }
-    });
-
-    closeModal("modal-scan-confirm");
-    saveLocalStorageData();
-    // Automatically trigger background real-time price synchronization
-    updateStockPrices();
-    showToast("자산 정보 반영 완료", "스크린샷으로 추출된 내역이 포트폴리오에 병합되었습니다.");
-}
 
 // --------------------------------------------------------------------------
 // DATA BACKUP & RESTORE UTILITIES (PREVENTS CACHE-CLEAR DATA LOSS)
 // --------------------------------------------------------------------------
 function setupBackupAndRestore() {
-    // Inject backup controls into the parser tab dynamically to save space!
-    const parserPane = document.getElementById("tab-uploader");
+    // Inject backup controls into the dashboard tab dynamically
+    const dashboardPane = document.getElementById("tab-dashboard");
     const backupContainer = document.createElement("div");
     backupContainer.className = "glass-panel";
     backupContainer.style.marginTop = "20px";
@@ -1300,7 +831,12 @@ function setupBackupAndRestore() {
     `;
     
     // Add to the bottom of the parser tab
-    parserPane.appendChild(backupContainer);
+    const versionEl = dashboardPane.querySelector("div[style*='Antigravity Finance']");
+    if (versionEl) {
+        dashboardPane.insertBefore(backupContainer, versionEl);
+    } else {
+        dashboardPane.appendChild(backupContainer);
+    }
 
     // Bind export button
     document.getElementById("btn-export-backup").addEventListener("click", () => {
@@ -1365,12 +901,12 @@ function registerServiceWorkerLocal() {
     // Generate minimal Service Worker inline for seamless PWA execution!
     if ('serviceWorker' in navigator) {
         const swBlob = new Blob([`
-            const CACHE_NAME = 'antigravity-finance-v31';
+            const CACHE_NAME = 'antigravity-finance-v32';
             const ASSETS = [
                 './',
                 './index.html',
                 './style.css',
-                './app.js?v=31'
+                './app.js?v=32'
             ];
             self.addEventListener('install', e => {
                 self.skipWaiting();
@@ -1612,9 +1148,6 @@ window.addEventListener("DOMContentLoaded", () => {
             updateUI();
         });
     }
-
-    // 5. Setup file upload drag & drop listeners
-    setupUploader();
 
     // 6. Setup Backup and Restore system
     setupBackupAndRestore();
