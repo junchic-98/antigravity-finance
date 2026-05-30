@@ -677,7 +677,20 @@ async function submitAddAsset() {
 }
 
 // Open manual transaction form
+function populateOwnedStocksDatalist() {
+    const datalist = document.getElementById("owned-stocks-datalist");
+    if (!datalist) return;
+    datalist.innerHTML = "";
+    const uniqueNames = [...new Set(assetsData.stocks.map(s => s.name))];
+    uniqueNames.forEach(name => {
+        const option = document.createElement("option");
+        option.value = name;
+        datalist.appendChild(option);
+    });
+}
+
 function openAddTxModal() {
+    populateOwnedStocksDatalist();
     document.getElementById("input-tx-brokerage").value = "";
     document.getElementById("input-tx-asset-name").value = "";
     document.getElementById("input-tx-qty").value = "";
@@ -821,10 +834,15 @@ function setupBackupAndRestore() {
         <div class="panel-header">
             <h3 class="panel-title"><i class="fa-solid fa-database text-accent"></i> 자산 데이터 백업 및 복원</h3>
         </div>
-        <div class="form-row" style="gap: 10px;">
-            <button class="btn-primary col-6" id="btn-export-backup"><i class="fa-solid fa-file-export"></i> 백업 파일 생성</button>
-            <button class="btn-secondary col-6" id="btn-import-trigger"><i class="fa-solid fa-file-import"></i> 복원 파일 읽기</button>
+        <div class="form-row" style="gap: 10px; margin-bottom: 10px;">
+            <button class="btn-primary col-6" id="btn-export-backup" style="font-size: 12px; padding: 10px;"><i class="fa-solid fa-file-export"></i> JSON 백업 저장</button>
+            <button class="btn-secondary col-6" id="btn-import-trigger" style="font-size: 12px; padding: 10px;"><i class="fa-solid fa-file-import"></i> JSON 백업 복원</button>
         </div>
+        <div class="form-row" style="gap: 10px;">
+            <button class="btn-accent col-6" id="btn-export-csv" style="font-size: 12px; padding: 10px;"><i class="fa-solid fa-file-csv"></i> CSV 파일 추출</button>
+            <button class="btn-secondary col-6" id="btn-import-csv-trigger" style="font-size: 12px; padding: 10px;"><i class="fa-solid fa-file-circle-plus"></i> CSV 파일 입력</button>
+        </div>
+        <input type="file" id="csv-file-input" accept=".csv" style="display: none;">
         <div style="margin-top: 12px; border-top: 1px dashed var(--glass-border); padding-top: 12px; display: flex; justify-content: flex-end;">
             <button class="btn-secondary" id="btn-reset-data" style="background: rgba(239, 68, 68, 0.1); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.2); font-size: 11px; padding: 6px 12px; border-radius: 8px;"><i class="fa-solid fa-trash-can"></i> 전체 데이터 초기화</button>
         </div>
@@ -871,8 +889,94 @@ function setupBackupAndRestore() {
         fileInput.click();
     });
 
+    // Bind CSV Export
+    document.getElementById("btn-export-csv").addEventListener("click", () => {
+        if (assetsData.stocks.length === 0) {
+            showToast("CSV 추출 실패", "추출할 주식 자산이 없습니다.", "error");
+            return;
+        }
+        let csvContent = "﻿계좌번호,종목명,티커,보유수량,평수단가,통화(KRW or USD)\n";
+        assetsData.stocks.forEach(s => {
+            csvContent += `"${s.brokerage || ''}","${s.name || ''}","${s.ticker || ''}",${s.quantity || 0},${s.avg_purchase_price || 0},"${s.currency || 'KRW'}"\n`;
+        });
+        
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `antigravity_portfolio_${new Date().toISOString().slice(0, 10)}.csv`);
+        link.click();
+        showToast("CSV 추출 성공", "포트폴리오 CSV 파일이 다운로드되었습니다.");
+    });
+
+    // Bind CSV Import trigger
+    const csvFileInput = document.getElementById("csv-file-input");
+    document.getElementById("btn-import-csv-trigger").addEventListener("click", () => {
+        csvFileInput.click();
+    });
+
+    // Bind CSV File Load
+    csvFileInput.addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+            try {
+                const text = evt.target.result;
+                const lines = text.split(/\r?\n/).map(line => line.trim()).filter(line => line.length > 0);
+                if (lines.length <= 1) {
+                    showToast("오류", "CSV 파일에 데이터가 없습니다.", "error");
+                    return;
+                }
+
+                const importedStocks = [];
+                for (let i = 1; i < lines.length; i++) {
+                    const row = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v.replace(/^"|"$/g, '').trim());
+                    if (row.length < 5) continue;
+                    
+                    const brokerage = row[0] || "기본계좌";
+                    const name = row[1];
+                    const ticker = row[2] || (name.match(/[a-zA-Z]/) ? "US_STK" : "KR_STK");
+                    const quantity = parseFloat(row[3]) || 0;
+                    const avg_purchase_price = parseFloat(row[4]) || 0;
+                    const currency = row[5] || "KRW";
+
+                    if (!name || quantity <= 0) continue;
+
+                    importedStocks.push({
+                        id: `stock_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+                        brokerage: brokerage,
+                        name: name,
+                        ticker: ticker.toUpperCase(),
+                        quantity: quantity,
+                        avg_purchase_price: avg_purchase_price,
+                        current_price: avg_purchase_price, // default current price to purchase price
+                        currency: currency.toUpperCase()
+                    });
+                }
+
+                if (importedStocks.length > 0) {
+                    if (confirm(`CSV 파일에서 ${importedStocks.length}개의 주식 자산을 읽어왔습니다. 기존 자산 목록에 추가하시겠습니까?\n(취소 시 기존 자산을 덮어씁니다.)`)) {
+                        assetsData.stocks.push(...importedStocks);
+                    } else {
+                        assetsData.stocks = importedStocks;
+                    }
+                    saveLocalStorageData();
+                    updateStockPrices(); // dynamically fetch fresh prices for all imported stocks
+                    showToast("CSV 가져오기 성공", "주식 자산 포트폴리오를 성공적으로 갱신했습니다!");
+                } else {
+                    showToast("가져오기 실패", "올바른 CSV 형식의 데이터가 없습니다.", "error");
+                }
+            } catch(err) {
+                showToast("오류", "CSV 파일 파싱 중 에러가 발생했습니다.", "error");
+            }
+        };
+        reader.readAsText(file, "EUC-KR"); // Support Korean encoding Excel CSV files
+        csvFileInput.value = ""; // reset file input
+    });
+
     // Bind file input change
-    fileInput.addEventListener("change", (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
@@ -902,12 +1006,12 @@ function registerServiceWorkerLocal() {
     // Generate minimal Service Worker inline for seamless PWA execution!
     if ('serviceWorker' in navigator) {
         const swBlob = new Blob([`
-            const CACHE_NAME = 'antigravity-finance-v34';
+            const CACHE_NAME = 'antigravity-finance-v35';
             const ASSETS = [
                 './',
                 './index.html',
                 './style.css',
-                './app.js?v=34'
+                './app.js?v=35'
             ];
             self.addEventListener('install', e => {
                 self.skipWaiting();
