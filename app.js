@@ -1209,6 +1209,9 @@ function setupBackupAndRestore() {
             <button class="btn-primary col-6" id="btn-export-backup"><i class="fa-solid fa-file-export"></i> 백업 파일 생성</button>
             <button class="btn-secondary col-6" id="btn-import-trigger"><i class="fa-solid fa-file-import"></i> 복원 파일 읽기</button>
         </div>
+        <div style="margin-top: 12px; border-top: 1px dashed var(--glass-border); padding-top: 12px; display: flex; justify-content: flex-end;">
+            <button class="btn-secondary" id="btn-reset-data" style="background: rgba(239, 68, 68, 0.1); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.2); font-size: 11px; padding: 6px 12px; border-radius: 8px;"><i class="fa-solid fa-trash-can"></i> 전체 데이터 초기화</button>
+        </div>
         <input type="file" id="backup-file-input" accept=".json" style="display: none;">
     `;
     
@@ -1227,6 +1230,18 @@ function setupBackupAndRestore() {
         linkElement.setAttribute('download', exportFileDefaultName);
         linkElement.click();
         showToast("백업 완료", "백업 파일 다운로드가 시작되었습니다.");
+    });
+
+    // Bind reset button
+    document.getElementById("btn-reset-data").addEventListener("click", () => {
+        if (confirm("정말로 모든 보유 자산 및 거래 내역 데이터를 삭제하고 초기화하시겠습니까?\n(이 작업은 되돌릴 수 없으므로 필요 시 먼저 백업을 생성해 두세요!)")) {
+            if (confirm("최종 확인: 정말로 초기화하시겠습니까? 모든 로컬 데이터가 삭제됩니다.")) {
+                localStorage.removeItem("antigravity_assets_data");
+                assetsData = JSON.parse(JSON.stringify(defaultMockData));
+                saveLocalStorageData();
+                showToast("초기화 완료", "모든 데이터가 완전히 초기화되었습니다.", "success");
+            }
+        }
     });
 
     // Bind import trigger
@@ -1266,12 +1281,12 @@ function registerServiceWorkerLocal() {
     // Generate minimal Service Worker inline for seamless PWA execution!
     if ('serviceWorker' in navigator) {
         const swBlob = new Blob([`
-            const CACHE_NAME = 'antigravity-finance-v23';
+            const CACHE_NAME = 'antigravity-finance-v24';
             const ASSETS = [
                 './',
                 './index.html',
                 './style.css',
-                './app.js?v=23'
+                './app.js?v=24'
             ];
             self.addEventListener('install', e => {
                 e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
