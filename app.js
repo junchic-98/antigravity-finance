@@ -830,18 +830,33 @@ function parseTableOCR(text) {
     const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
     const items = [];
     
-    // 1. Identify Stock Names
+    let tableStarted = false;
     const stockNames = [];
     const tickers = [];
+    const rawNumbers = [];
+    
     const ignoreKeywords = [
         "외화로 표기 중", "외화로 표기중", "외화로", "표기 중", "표기중",
-        "종목명", "잔고", "평가", "수익률", "계좌", "예수금", "수량", "단가", "금액", "가격", "체결",
+        "원화로", "원화로 표기", "종목명", "잔고", "평가", "수익률", "계좌", "예수금", "수량", "단가", "금액", "가격", "체결",
         "나무증권", "한국투자", "토스", "KB증권", "미래에셋", "삼성증권", "금융사", "기관",
         "보유", "총자산", "자산", "합계", "소계", "누적", "보유주식", "안내", "상세", "조회", "가능"
     ];
     
+    const headerKeywords = ["종목명", "평가손익", "잔고수량", "매입가", "국가", "구분", "수익률", "평가금액", "현재가"];
+    
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
+        
+        // Detect table start
+        if (!tableStarted) {
+            for (let hk of headerKeywords) {
+                if (line.includes(hk)) {
+                    tableStarted = true;
+                    break;
+                }
+            }
+            continue; // Skip lines before table headers
+        }
         
         // Skip purely numeric lines, percentages, dates, account numbers
         if (/^[0-9\-\.,\/\s%]+$/.test(line)) continue;
@@ -864,24 +879,29 @@ function parseTableOCR(text) {
             ticker = tickerMatch[1].toUpperCase();
         }
         
-        // If this line is just a market label like "국내", "미국", "해외", skip it
-        if (line === "국내" || line === "미국" || line === "해외") continue;
-        
         // Clean up stock name (remove random OCR symbols)
-        let cleanName = line.replace(/\(([A-Z0-9\.]+)\)/i, '').replace(/^[^a-zA-Z가-힣0-9]+/, '').replace(/[^a-zA-Z가-힣0-9\s]+$/, '').trim();
+        let cleanName = line.replace(/\(([A-Z0-9\.]+)\)/i, '').replace(/^[^a-zA-Z가-힣0-9\s]+/, '').replace(/[^a-zA-Z가-힣0-9\s]+$/, '').trim();
         if (cleanName.length < 2) continue;
+        if (cleanName === "국내" || cleanName === "미국" || cleanName === "해외" || cleanName === "현금") continue;
         
         stockNames.push(cleanName);
         tickers.push(ticker);
     }
     
-    // 2. Extract Numbers
-    const numbers = [];
+    // Extract numbers after table header
+    let tableStartedForNumbers = false;
     for (let line of lines) {
-        // Skip percentages
-        if (line.includes('%')) continue;
+        if (!tableStartedForNumbers) {
+            for (let hk of headerKeywords) {
+                if (line.includes(hk)) {
+                    tableStartedForNumbers = true;
+                    break;
+                }
+            }
+            continue;
+        }
         
-        // Ignore dates like 2026-05-30 or account numbers like 203-01-265287
+        if (line.includes('%')) continue;
         if (/\b\d{4}-\d{2}-\d{2}\b/.test(line)) continue;
         if (/\b\d{3}-\d{2,3}-\d{5,8}\b/.test(line)) continue;
         
@@ -891,7 +911,7 @@ function parseTableOCR(text) {
             lineNumbers.forEach(numStr => {
                 const val = parseFloat(numStr);
                 if (!isNaN(val)) {
-                    numbers.push(val);
+                    rawNumbers.push(val);
                 }
             });
         }
@@ -900,96 +920,80 @@ function parseTableOCR(text) {
     const N = stockNames.length;
     if (N === 0) return items;
     
-    // 3. Layout Detection: Column-by-Column vs Row-by-Row
-    // We expect at least 2N numbers to parse quantity and price for each stock
-    if (numbers.length >= 2 * N) {
-        let isColumnLayout = false;
+    console.log("Filtered Stocks Names:", stockNames);
+    console.log("Filtered Raw Numbers:", rawNumbers);
+    
+    // Map names to numbers
+    for (let i = 0; i < N; i++) {
+        let quantity = 1;
+        let price = 1000;
         
-        // Calculate average of first N numbers vs next N numbers
-        let sum1 = 0, sum2 = 0;
-        for (let i = 0; i < N; i++) {
-            sum1 += numbers[i];
-            sum2 += numbers[N + i];
+        // Let's locate the values intelligently!
+        if (rawNumbers.length >= 5 * N) {
+            // Extract quantities and purchase prices based on our mathematical formula
+            quantity = rawNumbers[N + 2 * i] || 1;
+            price = rawNumbers[3 * N + 2 * i] || 1000;
+        } else if (rawNumbers.length >= 4 * N) {
+            // If no profits column: total 4N numbers
+            quantity = rawNumbers[2 * i] || 1;
+            price = rawNumbers[2 * N + 2 * i] || 1000;
+        } else if (rawNumbers.length >= 2 * N) {
+            // If only quantities and prices: total 2N numbers
+            quantity = rawNumbers[i] || 1;
+            price = rawNumbers[N + i] || 1000;
+        } else {
+            // Fallback
+            quantity = rawNumbers[2 * i] || 1;
+            price = rawNumbers[2 * i + 1] || 1000;
         }
-        const avg1 = sum1 / N;
-        const avg2 = sum2 / N;
         
-        // If the second half has significantly larger numbers, it's a column layout (Quantities then Prices)
-        if (avg2 > avg1 * 5) {
-            isColumnLayout = true;
+        // Self-correction check: Quantity is usually smaller than Purchase Price.
+        if (quantity > price && price > 0) {
+            const temp = quantity;
+            quantity = price;
+            price = temp;
         }
         
-        for (let i = 0; i < N; i++) {
-            let quantity = 1;
-            let price = 1000;
-            
-            if (isColumnLayout) {
-                quantity = numbers[i];
-                price = numbers[N + i];
-            } else {
-                quantity = numbers[2 * i];
-                price = numbers[2 * i + 1];
-            }
-            
-            let name = stockNames[i];
-            let ticker = tickers[i];
-            let currency = "KRW";
-            
-            if (name.match(/[a-zA-Z]/) || ticker || name.includes("미국") || name.includes("해외")) {
-                currency = "USD";
-            }
-            if (!ticker) {
-                ticker = currency === "USD" ? "US_STK" : "KR_STK";
-            }
-            
-            // Smart auto-mapping of common Korean stocks
-            if (currency === "KRW" && (ticker === "KR_STK" || !ticker)) {
-                const dict = {
-                    "삼성전자": "005930",
-                    "SK하이닉스": "000660",
-                    "현대차": "005380",
-                    "현대자동차": "005380",
-                    "네이버": "035420",
-                    "NAVER": "035420",
-                    "카카오": "035720",
-                    "TIGER 미국나스닥100레버리지": "418660",
-                    "ACE 미국빅테크TOP7 Plus레버리지": "465580"
-                };
-                for (let key in dict) {
-                    if (name.includes(key)) {
-                        ticker = dict[key];
-                        break;
-                    }
+        let name = stockNames[i];
+        let ticker = tickers[i];
+        let currency = "KRW";
+        
+        if (name.match(/[a-zA-Z]/) || ticker || name.includes("미국") || name.includes("해외")) {
+            currency = "USD";
+        }
+        if (!ticker) {
+            ticker = currency === "USD" ? "US_STK" : "KR_STK";
+        }
+        
+        // Smart auto-mapping of common Korean stocks to real 6-digit tickers for live pricing
+        if (currency === "KRW" && (ticker === "KR_STK" || !ticker)) {
+            const dict = {
+                "삼성전자": "005930",
+                "SK하이닉스": "000660",
+                "현대차": "005380",
+                "현대자동차": "005380",
+                "네이버": "035420",
+                "NAVER": "035420",
+                "카카오": "035720",
+                "TIGER 미국나스닥100레버리지": "418660",
+                "ACE 미국빅테크TOP7 Plus레버리지": "465580"
+            };
+            for (let key in dict) {
+                if (name.includes(key)) {
+                    ticker = dict[key];
+                    break;
                 }
             }
-            
-            items.push({
-                name: name,
-                ticker: ticker,
-                quantity: quantity,
-                price: price,
-                current_price: price,
-                currency: currency
-            });
         }
-    } else {
-        // Fallback: If not enough numbers, just map whatever we can row-by-row
-        for (let i = 0; i < N; i++) {
-            let quantity = numbers[i] || 1;
-            let price = numbers[N + i] || 1000;
-            let name = stockNames[i];
-            let ticker = tickers[i] || (name.match(/[a-zA-Z]/) ? "US_STK" : "KR_STK");
-            let currency = name.match(/[a-zA-Z]/) || name.includes("미국") ? "USD" : "KRW";
-            
-            items.push({
-                name: name,
-                ticker: ticker,
-                quantity: quantity,
-                price: price,
-                current_price: price,
-                currency: currency
-            });
-        }
+        
+        items.push({
+            name: name,
+            ticker: ticker,
+            quantity: quantity,
+            price: price,
+            current_price: price,
+            currency: currency
+        });
     }
     
     return items;
