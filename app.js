@@ -836,14 +836,19 @@ function parseTableOCR(text) {
     const rawNumbers = [];
     
     const ignoreKeywords = [
-        "외화로 표기 중", "외화로 표기중", "외화로", "표기 중", "표기중",
-        "원화로", "원화로 표기", "종목명", "잔고", "평가", "수익률", "계좌", "예수금", "수량", "단가", "금액", "가격", "체결",
+        "종목명", "잔고", "평가", "수익률", "계좌", "예수금", "수량", "단가", "금액", "가격", "체결",
         "나무증권", "한국투자", "토스", "KB증권", "미래에셋", "삼성증권", "금융사", "기관",
         "보유", "총자산", "자산", "합계", "소계", "누적", "보유주식", "안내", "상세", "조회", "가능"
     ];
     
     const headerKeywords = ["종목명", "평가손익", "잔고수량", "매입가", "국가", "구분", "수익률", "평가금액", "현재가"];
     
+    const footerKeywords = [
+        "원화로 표기", "외화로 표기", "표기 중", "표기중", 
+        "이체", "환경설정", "주식현재가", "주식주문", "국내주식", "해외주식", "뱅킹", "계좌개설", "메뉴", "비용포함"
+    ];
+    
+    // 1. Parse Stock Names
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         
@@ -856,6 +861,18 @@ function parseTableOCR(text) {
                 }
             }
             continue; // Skip lines before table headers
+        }
+        
+        // Detect table end (Footer)
+        let isFooter = false;
+        for (let fk of footerKeywords) {
+            if (line.toLowerCase().includes(fk.toLowerCase())) {
+                isFooter = true;
+                break;
+            }
+        }
+        if (isFooter) {
+            break; // Stop parsing names immediately!
         }
         
         // Skip purely numeric lines, percentages, dates, account numbers
@@ -888,7 +905,7 @@ function parseTableOCR(text) {
         tickers.push(ticker);
     }
     
-    // Extract numbers after table header
+    // 2. Extract Numbers (Only up to the table end)
     let tableStartedForNumbers = false;
     for (let line of lines) {
         if (!tableStartedForNumbers) {
@@ -899,6 +916,18 @@ function parseTableOCR(text) {
                 }
             }
             continue;
+        }
+        
+        // Detect table end (Footer) for numbers to prevent mixing in footer numbers
+        let isFooter = false;
+        for (let fk of footerKeywords) {
+            if (line.toLowerCase().includes(fk.toLowerCase())) {
+                isFooter = true;
+                break;
+            }
+        }
+        if (isFooter) {
+            break; // Stop extracting numbers immediately!
         }
         
         if (line.includes('%')) continue;
